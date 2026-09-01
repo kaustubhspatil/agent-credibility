@@ -31,6 +31,7 @@ import uuid
 from collections import Counter
 from dataclasses import dataclass, field
 
+from .chain import ChainState, Checkpoint, checkpoint
 from .envelope import Capability, Reversibility, TaskEnvelope, ToolSpec, derive_envelope
 
 
@@ -81,6 +82,12 @@ class EpisodeRecord:
 
     # scope actually exercised, for the divergence signal
     observed_capabilities: tuple[str, ...] = ()
+
+    # tamper-evident sequencing. seq and prev_hash are set as the record is
+    # appended to the deployment's chain; entry_hash commits to everything else.
+    seq: int = 0
+    prev_hash: str = "0" * 64
+    entry_hash: str = ""
 
     # provenance
     schema_version: str = "1.0"
@@ -249,6 +256,7 @@ class Recorder:
         self.envelope: TaskEnvelope = derive_envelope(self.tools)
         self.tool_index: dict[str, ToolSpec] = {t.name: t for t in self.tools}
         self.deployment_hash = _hash_id(self.deployment_id, self.salt)
+        self.chain = ChainState()
         self._records: list[EpisodeRecord] = []
         self._observed: set[Capability] = set()
         self._used_tools: set[str] = set()
@@ -256,11 +264,32 @@ class Recorder:
     def episode(self, task_id: str, pass_index: int = 1) -> Episode:
         return Episode(self, task_id, pass_index)
 
+    def checkpoint(self) -> Checkpoint:
+        """Commitment to the current chain head.
+
+        Only meaningful once it has left this process -- see chain.py.
+        """
+        return checkpoint(self.deployment_hash, self.chain)
+
     def _note_tools(self, names: set[str]) -> None:
         """In-process only: which granted tools have actually been exercised."""
         self._used_tools |= names
 
     def _emit(self, record: EpisodeRecord) -> None:
+        # Chain before the record can reach a sink: anything that leaves the
+        # process must already be committed to the sequence.
+        from dataclasses import asdict
+
+        body = asdict(record)
+        body["observed_capabilities"] = list(record.observed_capabilities)
+        body.pop("seq", None)
+        body.pop("prev_hash", None)
+        body.pop("entry_hash", None)
+        seq, prev, digest = self.chain.advance(body)
+        record.seq = seq
+        record.prev_hash = prev
+        record.entry_hash = digest
+
         self._records.append(record)
         self._observed |= {Capability(c) for c in record.observed_capabilities}
         if self.sink is not None:

@@ -11,11 +11,13 @@ import json
 import pytest
 
 from credibility.recorder import (
+    GENESIS,
     Capability,
     Recorder,
     Reversibility,
     ToolSpec,
     WireViolation,
+    canonical,
     compare,
     derive_envelope,
     manifest_hash,
@@ -23,6 +25,7 @@ from credibility.recorder import (
     to_otel_attributes,
     to_wire,
     validate,
+    verify,
 )
 
 CANARY = "SSN-078-05-1120-CANARY"
@@ -403,3 +406,115 @@ def test_no_prior_matches_is_visible_rather_than_silent():
     env = derive_envelope([ToolSpec("zzz_opaque_widget")])
     assert env.capabilities == frozenset()
     assert env.inferred_tools == 1  # flagged as guessed, so it can be loaded
+
+
+# --- tamper-evident sequencing --------------------------------------------
+
+
+def _chained(n=5):
+    rec = Recorder(deployment_id="acme", role="ops", tools=_tools())
+    for i in range(n):
+        with rec.episode(f"t{i}") as ep:
+            ep.action("read_case")
+            ep.resolve(success=(i % 2 == 0))
+    return rec, [to_wire(r) for r in rec.records]
+
+
+def test_intact_chain_verifies_against_its_checkpoint():
+    rec, wire = _chained()
+    cp = rec.checkpoint()
+    assert verify(wire, expected_head=cp.head)
+    assert verify(wire, expected_head=cp.head).checked == 5
+    assert cp.seq == 5
+
+
+def test_dropping_a_failed_episode_is_detected():
+    """The Article 12 failure mode: selective deletion before an audit."""
+    rec, wire = _chained()
+    cp = rec.checkpoint()
+    survivors = [w for w in wire if w["resolved"] is not False]
+    assert len(survivors) < len(wire)
+
+    result = verify(survivors, expected_head=cp.head)
+    assert not result
+    assert "sequence gap" in result.reason
+
+
+def test_editing_a_record_is_detected():
+    rec, wire = _chained()
+    cp = rec.checkpoint()
+    wire[2] = dict(wire[2], resolved=True, n_actions=99)
+    result = verify(wire, expected_head=cp.head)
+    assert not result
+    assert result.first_bad_seq == 2
+    assert "entry_hash" in result.reason
+
+
+def test_reordering_is_detected():
+    rec, wire = _chained()
+    cp = rec.checkpoint()
+    swapped = [wire[0], wire[2], wire[1], wire[3], wire[4]]
+    assert not verify(swapped, expected_head=cp.head)
+
+
+def test_truncating_the_end_verifies_alone_but_fails_the_checkpoint():
+    """Trimming the tail leaves a self-consistent chain -- the checkpoint is
+    what catches it, which is exactly why the head has to be anchored."""
+    rec, wire = _chained()
+    cp = rec.checkpoint()
+    trimmed = wire[:3]
+    assert verify(trimmed)                      # self-consistent
+    assert not verify(trimmed, expected_head=cp.head)   # but short of the head
+
+
+def test_a_rewritten_chain_self_verifies_and_only_the_checkpoint_catches_it():
+    """The honest limitation, pinned as a test.
+
+    A vendor who drops an episode and recomputes every hash after it produces
+    a chain that verifies perfectly on its own. Chaining is tamper-*evident*
+    only once the head has been committed somewhere they cannot rewrite.
+    """
+    rec, wire = _chained()
+    real_head = rec.checkpoint().head
+
+    honest = Recorder(deployment_id="acme", role="ops", tools=_tools())
+    for i in range(5):
+        if i == 1:
+            continue  # the episode being disappeared
+        with honest.episode(f"t{i}") as ep:
+            ep.action("read_case")
+            ep.resolve(success=(i % 2 == 0))
+    rewritten = [to_wire(r) for r in honest.records]
+
+    assert verify(rewritten)                       # indistinguishable alone
+    assert not verify(rewritten, expected_head=real_head)
+
+
+def test_chain_fields_are_hex64_and_validated():
+    rec, wire = _chained(2)
+    assert wire[0]["prev_hash"] == GENESIS
+    assert wire[1]["prev_hash"] == wire[0]["entry_hash"]
+    for w in wire:
+        assert len(w["entry_hash"]) == 64
+    with pytest.raises(WireViolation):
+        validate(dict(wire[0], entry_hash="deadbeef"))
+
+
+def test_canonical_encoding_is_stable_across_key_order():
+    rec, wire = _chained(1)
+    shuffled = dict(reversed(list(wire[0].items())))
+    assert canonical(shuffled) == canonical(wire[0])
+
+
+def test_chaining_does_not_reintroduce_a_leak_path():
+    rec = Recorder(
+        deployment_id=f"tenant-{CANARY}",
+        role="ops",
+        tools=[ToolSpec("read_case", capabilities=frozenset(),
+                        reversibility=Reversibility.REVERSIBLE)],
+    )
+    with rec.episode(task_id=f"ticket-{CANARY}") as ep:
+        ep.action("read_case")
+        ep.resolve(success=True)
+    blob = to_json(rec.records[-1]) + json.dumps(rec.checkpoint().to_wire())
+    assert CANARY not in blob

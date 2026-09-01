@@ -220,6 +220,20 @@ A full record looks like this, and this is all of it:
  "role":"customer_support","task_hash":"5ddb12eaa459eb73","tool_entropy":1.251629}
 ```
 
+### Tamper-evident sequencing
+
+Article 12's failure mode is not corruption, it is *selection* — a vendor quietly dropping the episodes that went badly before handing the log to an auditor. Per-record hashes do not catch that, because every surviving record is individually valid. A chain does:
+
+```
+entry_hash(n) = sha256( prev_hash(n) || canonical_json(record without hashes) )
+```
+
+Deleting a failed episode leaves a sequence gap; editing one breaks its `entry_hash`; reordering breaks both.
+
+**What chaining alone does not prove, stated up front.** A vendor who wants to drop an episode can delete it and recompute every hash after it, and the result verifies perfectly. Chaining is tamper-*evident* only once the head has been committed somewhere the vendor cannot rewrite — sent to the bureau, counter-signed, or published. `Checkpoint` is that commitment, and any Article 12 claim rests on the checkpoints being anchored, not on the chain existing.
+
+That limitation is pinned as a test (`test_a_rewritten_chain_self_verifies_and_only_the_checkpoint_catches_it`) rather than left in a footnote, because an auditor who discovers it themselves will discount everything else.
+
 ### The task envelope is derived, not declared
 
 A declared envelope is an incentive to lie — premiums fall as scope narrows, and a wrong class label measurably costs 2.6–2.9× in day-zero pricing error. So scope is derived from the tool manifest the agent is actually wired to, and the declaration is kept only as a cross-check.
