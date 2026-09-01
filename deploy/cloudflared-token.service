@@ -1,0 +1,31 @@
+[Unit]
+Description=Cloudflare named tunnel for the Freeboard bureau (dashboard-managed)
+Documentation=https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/
+After=network-online.target bureau.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=sentinel
+
+# The connector token is read from the environment, never passed as an
+# argument. Anything on a command line is visible in `ps` to every user on the
+# box; this token authorises running a tunnel on the account, so it stays out
+# of the process list.
+EnvironmentFile=/etc/cloudflared/token.env
+ExecStart=/usr/local/bin/cloudflared --no-autoupdate --loglevel info tunnel run
+
+Restart=always
+RestartSec=5
+
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+LockPersonality=yes
+
+[Install]
+WantedBy=multi-user.target

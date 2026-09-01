@@ -1,63 +1,71 @@
 # Giving the bureau a stable hostname
 
-The quick tunnel currently in front of the bureau proves the path works, but it
-is not an endpoint: its hostname changes on every restart and Cloudflare offer
-no uptime guarantee. A design partner needs something they configure once.
+The quick tunnel currently in front of the bureau proves the path works but is
+not an endpoint: its hostname changes on every restart. A named tunnel keeps
+it, which is the difference between a demo and something a partner configures
+once and forgets.
 
-Two prerequisites are yours and cannot be automated:
+Two ways to do this. The first is better for a headless box.
 
-1. **A domain on Cloudflare.** A named tunnel routes to a hostname inside a
-   zone you control. `trycloudflare.com` is quick-tunnel-only, and Cloudflare
-   no longer issues zones for domains you do not own. Register one (~$10/yr),
-   then add it to Cloudflare and point the registrar's nameservers at the pair
-   Cloudflare gives you. Propagation is usually under an hour.
+## A. Dashboard-managed tunnel (recommended)
 
-2. **`cloudflared tunnel login`.** This opens a browser and authenticates as
-   you. Run it yourself; it writes `~/.cloudflared/cert.pem` on the box, which
-   is a credential and should never leave it.
+No browser flow on the server, no `cert.pem`, no credentials JSON. Cloudflare
+creates the DNS record for you. One token, which lives in one file.
 
-## On the box, after those two
+### In the Cloudflare dashboard
+
+1. **Zero Trust -> Networks -> Tunnels -> Create a tunnel -> Cloudflared.**
+   Name it `freeboard-bureau`.
+2. Cloudflare shows an install command containing a long token. **Copy only the
+   token** -- the part after `--token`. Ignore the rest of the command; the
+   service below runs it properly.
+3. Still in the dashboard, add a **Public Hostname**:
+   - Subdomain `bureau`, Domain `freeboardrisk.com`
+   - Type **HTTP**, URL **127.0.0.1:8080**
+   That creates the DNS record automatically. Nothing to add by hand.
+
+### On the box
 
 ```bash
-# 1. authenticate (browser opens; pick the zone you just added)
-cloudflared tunnel login
-
-# 2. create the tunnel and note the UUID it prints
-cloudflared tunnel create freeboard-bureau
-
-# 3. route a hostname to it
-cloudflared tunnel route dns freeboard-bureau bureau.yourdomain.com
-
-# 4. install config and credentials
 sudo mkdir -p /etc/cloudflared
-sudo cp ~/.cloudflared/<UUID>.json /etc/cloudflared/
-sudo cp /opt/freeboard/deploy/cloudflared-config.example.yml /etc/cloudflared/config.yml
-sudo sed -i "s/REPLACE_WITH_TUNNEL_ID/<UUID>/g;s/REPLACE_WITH_HOSTNAME/bureau.yourdomain.com/" \
-     /etc/cloudflared/config.yml
-sudo chown -R sentinel:sentinel /etc/cloudflared
-sudo chmod 600 /etc/cloudflared/<UUID>.json
-
-# 5. swap the quick tunnel for the named one
-sudo systemctl disable --now cloudflared-bureau
-sudo cp /opt/freeboard/deploy/cloudflared-named.service /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl enable --now cloudflared-named
-
-# 6. verify from somewhere else entirely
-curl https://bureau.yourdomain.com/v1/health
+sudo install -m 600 -o root -g root /dev/null /etc/cloudflared/token.env
+sudo tee /etc/cloudflared/token.env >/dev/null <<'ENV'
+TUNNEL_TOKEN=paste-the-token-here
+ENV
+sudo chmod 600 /etc/cloudflared/token.env
+sudo chown sentinel:sentinel /etc/cloudflared/token.env
 ```
 
-## The alternative, if you would rather not buy a domain
+Then say so, and the service swap and verification can be done for you.
 
-Restore billing on the GCP project, then open 80/443 and use
-`deploy/caddy.example`. Caddy obtains and renews Let's Encrypt certificates
-itself. This still needs a domain for the certificate, so it is not cheaper --
-it is only different. The tunnel wins on having no inbound attack surface and
-on surviving the ephemeral IP, which the closed billing account makes
-unavoidable anyway.
+**Do not** paste the token into a chat, a commit, or a command line. A token in
+a transcript is compromised from the moment it is sent, and this one authorises
+running a tunnel on your account. `EnvironmentFile` keeps it out of `ps` too.
 
-## What not to do
+## B. Locally-managed tunnel (browser login)
 
-Do not put the credentials JSON or `cert.pem` in the repo, in an image, or in
-an environment variable. They authorise creating tunnels on your account. Mode
-600, owned by the service user, on the host only.
+Only if you specifically want the tunnel defined on the box rather than in the
+dashboard.
+
+```bash
+cloudflared tunnel login          # prints a URL; open it in your own browser
+cloudflared tunnel create freeboard-bureau
+cloudflared tunnel route dns freeboard-bureau bureau.freeboardrisk.com
+```
+
+Then install `cloudflared-config.example.yml` as `/etc/cloudflared/config.yml`,
+substitute the tunnel UUID and hostname, copy the credentials JSON beside it at
+mode 600, and use `cloudflared-named.service` instead.
+
+Note the login runs **on the box**, not on your laptop -- the credential has to
+end up where the tunnel runs. It prints a URL you open in any browser.
+
+## Afterwards
+
+```bash
+curl https://bureau.freeboardrisk.com/v1/health
+```
+
+The quick tunnel (`cloudflared-bureau.service`) gets disabled in the swap. Keep
+it installed but stopped: it costs nothing and is a fallback if the named
+tunnel is ever misconfigured.
