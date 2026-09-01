@@ -42,6 +42,12 @@ log = logging.getLogger("freeboard.client")
 DEFAULT_TIMEOUT = 10.0
 DEFAULT_BATCH = 100
 
+try:
+    from . import __version__ as _VERSION
+except ImportError:  # pragma: no cover
+    _VERSION = "0"
+USER_AGENT = f"freeboard/{_VERSION} (+https://github.com/kaustubhspatil/agent-credibility)"
+
 
 class BureauError(RuntimeError):
     """The bureau answered, and the answer was no."""
@@ -63,10 +69,16 @@ class BureauClient:
     def _request(self, method: str, path: str, body: Any = None) -> dict[str, Any]:
         url = f"{self.base_url}{path}"
         data = json.dumps(body).encode() if body is not None else None
-        req = urllib.request.Request(
-            url, data=data, method=method,
-            headers={"Content-Type": "application/json"} if data else {},
-        )
+        # A real User-Agent matters more than politeness here. urllib's default
+        # ("Python-urllib/3.x") is treated as a bot signature by common edge
+        # protections -- Cloudflare's Browser Integrity Check returns 1010 for
+        # it -- so a bureau behind any CDN would reject every SDK request while
+        # accepting curl. Identifying the client also lets a bureau operator
+        # see which versions are in the field.
+        headers = {"User-Agent": USER_AGENT, "Accept": "application/json"}
+        if data:
+            headers["Content-Type"] = "application/json"
+        req = urllib.request.Request(url, data=data, method=method, headers=headers)
         try:
             with urllib.request.urlopen(req, timeout=self.timeout) as resp:
                 return json.loads(resp.read() or b"{}")
