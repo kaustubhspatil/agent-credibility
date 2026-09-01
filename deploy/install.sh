@@ -35,6 +35,10 @@ assert sys.version_info >= (3, 10), f"need python 3.10+, found {sys.version}"
 print("python", sys.version.split()[0], "ok")
 PY
 
+# Record the deployed revision before handing the tree to the service user:
+# afterwards git refuses to read it as root ("dubious ownership").
+REV="$(git -C "$APP_DIR" rev-parse --short HEAD)"
+
 chown -R freeboard:freeboard "$APP_DIR" "$DATA_DIR"
 chmod 750 "$DATA_DIR"
 
@@ -48,4 +52,4 @@ sleep 2
 echo "==> health"
 systemctl is-active --quiet bureau && echo "    service active" || { journalctl -u bureau -n 30 --no-pager; exit 1; }
 curl -fsS --max-time 5 http://127.0.0.1:8080/v1/health && echo
-echo "==> done ($(git -C "$APP_DIR" rev-parse --short HEAD))"
+echo "==> done (${REV})"
