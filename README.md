@@ -169,6 +169,37 @@ Three consequences, and only the first is comfortable:
 
 Run-to-run noise is also large — 0.0794, comparable to task mix at 0.0765. The same agent, given the same task twice, often disagrees with itself. That is a floor on how well *any* per-deployment estimate can do.
 
+## The bureau
+
+`src/bureau/` is the receiving end: an accountless ingest endpoint, standard library only, SQLite for storage.
+
+```
+POST /v1/episodes     submit a batch of wire records, get your class prior back
+POST /v1/checkpoints  anchor a chain head outside your own control
+GET  /v1/priors       read a role's pooled prior
+GET  /v1/health       counts
+```
+
+Two things about it are load-bearing.
+
+**`POST /v1/checkpoints` is what makes the tamper-evidence claim true.** A hash chain proves nothing against the party holding it — delete a record, recompute every hash after it, and the result verifies perfectly. Only a head committed somewhere the writer cannot rewrite closes that. Until this endpoint existed, the claim was aspirational.
+
+**The reciprocity is the response body, not a policy.** You POST your sufficient statistics and the same round trip returns the pooled prior for your class and the credibility weight your own exposure has earned. Contribute and you can price day zero; don't, and you wait to accumulate your own history.
+
+### Accountless ingest, and the attack it invites
+
+No signup, no key, no PII — right for adoption and privacy, and also the cheapest possible attack on the only asset that is hard to copy. Anyone with `curl` could submit fabricated deployments and move a class base rate, and the bureau by design cannot read content to tell the difference.
+
+So accepting a record and letting it move a published number are separate decisions. Anyone may submit. Admission to the pool is earned, and the evidence is the chain: at least 30 episodes, three hours of history, two checkpoints, and an intact chain. Faking one long continuously-anchored chain is cheap; faking hundreds, each with independent timing sustained over days, costs real elapsed time — the one input an attacker cannot parallelise.
+
+A second cap matters more than it looks. Credibility weights each risk by exposure, so the cheapest poison is not many fake deployments but **one enormous one** — a contributor with a hundred thousand episodes simply *is* the class prior. Exposure is therefore clipped so no single contributor exceeds a share of the class, computed iteratively: capping against the *uncapped* total would let an attacker inflate the total and so its own ceiling. From three contributors on, no one may hold a majority.
+
+None of this makes poisoning impossible — it makes it slow, expensive and visible, and quarantined data is kept so an audit can find it. This is Sybil *resistance*, not Sybil proof. A well-funded actor running genuine agents can still contribute genuine but adversarially-selected traffic; nothing short of identity solves that, and identity is what the design deliberately does not ask for.
+
+### What the bureau stores
+
+Exactly what the SDK emits: validated wire records — counts, enums and hashes. No prompts, no payloads, no tool names, no raw identifiers. The API rejects anything else, tested the same way the SDK is. The bureau being open source is what makes that claim checkable rather than promised.
+
 ## Checking this yourself
 
 **[docs/EVALUATING.md](docs/EVALUATING.md)** — the commands that verify each claim above: the canary test for the privacy guarantee, the chain tests for tamper-evidence, the estimator's agreement with both a closed form and the reference implementation, and the end-to-end example. It also lists, plainly, what the package does not do.
