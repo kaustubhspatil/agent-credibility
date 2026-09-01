@@ -117,6 +117,30 @@ validation; `verify` checks the chain across the round trip. JSON Lines rather t
 JSON array so that a process killed mid-run leaves a readable file with a complete
 prefix, instead of an unparseable truncated array.
 
+## Sending it to a bureau
+
+`BureauSink` drops into `Recorder(sink=...)`. It writes each episode to a local spool
+**before** attempting the network and swallows every transport failure, because a
+monitoring SDK that raises inside your agent loop when a remote server is slow is
+uninstallable. An unreachable bureau costs availability, never data.
+
+```python
+from freeboard import Recorder, BureauSink
+
+sink = BureauSink("https://bureau.freeboardrisk.com",
+                  spool="/var/lib/freeboard/acme.jsonl")
+rec = Recorder(deployment_id="acme-prod", role="customer_support",
+               tools=[...], sink=sink,
+               state_path="/var/lib/freeboard/acme.state")
+...
+sink.flush()
+print(sink.last_prior)          # pooled prior for your class, same round trip
+sink.anchor(rec.checkpoint())   # commit the chain head outside your own control
+```
+
+A reference bureau runs at `https://bureau.freeboardrisk.com`; the server is open
+source in the same repository, so what it stores can be checked rather than trusted.
+
 ## Status
 
 Early — the API may change before 1.0.

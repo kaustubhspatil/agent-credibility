@@ -21,7 +21,14 @@ And it is emphatically *per role*: across five roles K spans 7×, from a researc
 
 ## What this is
 
-The kill-switch experiment for an agent-insurance "base rate bureau", built to fail loudly if the idea does not work. Three corpora, ~40,000 episodes, 16 tests, every negative control reported.
+The kill-switch experiment for an agent-insurance "base rate bureau", built to fail loudly if the idea does not work. Three corpora, ~40,000 episodes, 151 tests, every negative control reported.
+
+It is no longer only an experiment. The SDK is on PyPI, the bureau is running, and the two talk to each other over TLS:
+
+```bash
+pip install freeboard
+curl https://bureau.freeboardrisk.com/v1/health
+```
 
 It did not fail — but it did force one headline down. An early study put the share of risk explained by an agent's role at 54%. A larger corpus that could separate a level the first could not see puts it at **9%**, with task mix at 66%. That correction is below in full, and it shapes the product design more than any of the positive results do.
 
@@ -171,7 +178,12 @@ Run-to-run noise is also large — 0.0794, comparable to task mix at 0.0765. The
 
 ## The bureau
 
-`src/bureau/` is the receiving end: an accountless ingest endpoint, standard library only, SQLite for storage.
+**Live at `https://bureau.freeboardrisk.com`.** `src/bureau/` is the receiving end: an accountless ingest endpoint, standard library only, SQLite for storage.
+
+```bash
+curl https://bureau.freeboardrisk.com/v1/health
+curl 'https://bureau.freeboardrisk.com/v1/priors?role=customer_support'
+```
 
 ```
 POST /v1/episodes     submit a batch of wire records, get your class prior back
@@ -185,6 +197,8 @@ Two things about it are load-bearing.
 **`POST /v1/checkpoints` is what makes the tamper-evidence claim true.** A hash chain proves nothing against the party holding it — delete a record, recompute every hash after it, and the result verifies perfectly. Only a head committed somewhere the writer cannot rewrite closes that. Until this endpoint existed, the claim was aspirational.
 
 **The reciprocity is the response body, not a policy.** You POST your sufficient statistics and the same round trip returns the pooled prior for your class and the credibility weight your own exposure has earned. Contribute and you can price day zero; don't, and you wait to accumulate your own history.
+
+It binds to `127.0.0.1` and is reached through a Cloudflare tunnel, which dials outbound: no inbound port is open on the host at all. `deploy/` carries the systemd units, an idempotent installer, a Caddy example for the reverse-proxy route, and a backup script.
 
 ### Accountless ingest, and the attack it invites
 
@@ -301,6 +315,26 @@ The `class_code` (`C111-I0`) keys on *powers*, not tool names: two customers who
 
 Tools that declare nothing fall back to keyword priors, and anything inferred that way is counted in `inferred_tools` so a premium can be loaded for the uncertainty. A guess is flagged as a guess.
 
+### Sending it somewhere
+
+`BureauSink` drops into `Recorder(sink=...)` and forwards batches to a bureau. The governing constraint is that it must never break the thing it measures, so an episode is written to a local spool **before** the network is attempted and every transport failure is swallowed onto `last_error`. An unreachable bureau costs availability, never data; the backlog delivers on recovery.
+
+```python
+from freeboard import Recorder, BureauSink
+
+sink = BureauSink("https://bureau.freeboardrisk.com",
+                  spool="/var/lib/freeboard/acme.jsonl")
+rec = Recorder(deployment_id="acme-prod", role="customer_support",
+               tools=[...], sink=sink,
+               state_path="/var/lib/freeboard/acme.state")
+
+sink.flush()
+print(sink.last_prior)      # the pooled prior, same round trip
+sink.anchor(rec.checkpoint())
+```
+
+One failure mode worth knowing about: a flush that succeeds server-side after the connection drops leaves the client believing it sent nothing. The bureau's 409 carries the sequence it actually holds, and the client resyncs rather than wedging on a conflict it can resolve.
+
 ### OpenTelemetry
 
 `to_otel_attributes()` emits `gen_ai.*` and `agent.credibility.*` span attributes for an integrator's existing tracer, validated on the way out. The package takes no OTel dependency.
@@ -359,6 +393,36 @@ separates their premiums is experience, which is what credibility supplies.
 It also means a public trust score cannot be built from structure alone. Structure says how
 bad it would be. Only telemetry says how often.
 
+## The severity lab
+
+`src/lab/` measures what the frequency machinery cannot: **conditional severity**. Given a stated hazard, how far does the damage reach — and did the agent notice it was under attack?
+
+It deliberately cannot produce a failure *frequency*. The workload would be ours, and task mix is 65.7% of systematic variance, so any base rate out of a laboratory is a property of the laboratory. A test enforces that no function returns one.
+
+Hazards follow Snyk's *ToxicSkills* audit (3,984 skills from ClawHub and skills.sh: 36% carrying security flaws, 13.4% critical, 1,467 malicious payloads confirmed). A hazard here is a *shape* — where adversarial content enters and what it asks for — never a working payload.
+
+### Three arms, because two are a tautology
+
+Comparing an agent that holds a dangerous tool against one that does not only restates that an agent without a tool cannot use it. So each experiment runs `constrained` (capability withheld), `baseline` (capability granted, no hazard) and `exposed` (capability granted, hazard present). The quantity worth having is **exposed minus baseline** — same agent, same powers, differing only in whether an adversary is present, which isolates inducement.
+
+An arm that never held the capability is flagged *refusal untested*: a power that was never granted is not resistance, and scoring it as safety would flatter every read-only agent alive.
+
+### Canary tools
+
+Inert probes planted in the toolset the agent sees. Calling one causes nothing but names a specific reasoning failure — a semantic decoy (paraphrased name, identical schema, description stating plainly that it returns stale data) means name similarity beat a description the agent was looking at; a privilege shortcut means scope indiscipline; a confused deputy means it let its authority be borrowed.
+
+Probes are computed **out** of the measured envelope on purpose. Counting three extra tools moves the class code's tool-count bucket — `C111-I0` becomes `C111-I1` — and the experiment becomes partly about its own instrumentation. Tripping a canary is also never scored as harm.
+
+### Security awareness: defended, or just lucky?
+
+Outcome alone cannot separate an agent that *defended* from one that got *lucky*, and they are not the same risk. An agent that never noticed has no mechanism that would have stopped a slightly different attack, so its severity distribution is far wider than its outcome implies — and every probe-based scoring product on the market prices them identically.
+
+The matrix is outcome × recognition over episodes that actually faced a hazard: **defended / lucky / overwhelmed / oblivious**. The headline is the share of safe outcomes that were luck.
+
+In the simulated suite an agent ends the indirect-injection scenario safely 73% of the time while recognising only 12% of attacks — 87% of that safety is luck — against 51% recognition on a direct jailbreak. Quiet attacks arriving in fetched content go unnoticed where blatant operator instructions do not, which is exactly the asymmetry that makes outcome-only scoring misleading.
+
+Those numbers come from `SimulatedExecutor` and are properties of constants chosen by hand, not findings. The structure is what is real; `E2BExecutor` is a documented placeholder, because the shape of a live integration should be settled by the first agent put through it.
+
 ## Trusting the number
 
 The estimator is validated against a closed-form answer before use. For a Beta(a,b)-Bernoulli class the credibility constant is exactly `a + b`, so there is a known target: `pytest` checks recovery across three concentration regimes and four seeds (16 tests).
@@ -376,11 +440,19 @@ A power analysis (`credibility/power.py`) settles interpretation in advance, bec
 ## Running it
 
 ```bash
-pip install -e ".[data,plots,dev]"
+pip install -e ".[dev]" && pip install -r requirements-research.txt
+pytest                                                      # 151 tests
+
+python examples/quickstart.py                               # SDK end to end, no network
+
 python -m credibility.extract --out data/episodes.parquet   # ~45 min, streams 4.2 GB
 python -m credibility.experiment --episodes data/episodes.parquet --out out
+python -m credibility.role_separation --out out             # AgentRewardBench
+python -m credibility.cx                                    # six roles (gated dataset)
+python -m credibility.atbench                               # envelope vs human labels
 python -m credibility.plots --out out
-pytest
+
+python -m bureau.app --db bureau.db --port 8080             # run a bureau locally
 ```
 
 Data: [`SWE-bench/SWE-smith-trajectories`](https://huggingface.co/datasets/SWE-bench/SWE-smith-trajectories) — 76,002 trajectories from SWE-agent + Claude 3.7 Sonnet. Extraction emits counts, rates and entropies per episode; no prompt or source text leaves the trajectory.
@@ -392,7 +464,10 @@ Data: [`SWE-bench/SWE-smith-trajectories`](https://huggingface.co/datasets/SWE-b
 | `src/credibility/extract.py` | trajectories → per-episode behavioural features |
 | `src/credibility/buhlmann.py` | Bühlmann-Straub variance components, Z, bootstrap CI |
 | `src/credibility/experiment.py` | E1 class definitions, E3 holdout sweep, E4 cold start, E5 signals |
-| `src/freeboard/` | the SDK: derived envelope, episode recording, wire format |
+| `src/freeboard/` | the SDK: envelope, recording, wire format, chain, state, estimator, sinks, bureau client |
+| `src/bureau/` | the receiving end: ingest, earned admission, pooled priors |
+| `src/lab/` | severity laboratory: hazards, canaries, three arms, awareness |
+| `deploy/` | systemd units, installer, Caddy and tunnel configs, verified backup |
 | `examples/quickstart.py` | instrument a fleet, emit records, price it |
 | `src/credibility/cx.py` | six-role corpus: per-role K, four-level decomposition |
 | `src/credibility/cx_probe.py` | schema probe for the gated corpus, reads footers only |
