@@ -180,10 +180,17 @@ Run-to-run noise is also large — 0.0794, comparable to task mix at 0.0765. The
 
 Measuring K on a corpus somebody else collected is research. Instrumenting a live fleet is the product. `freeboard` is the collection half: **stdlib only, no dependencies**, drops into any agent loop.
 
+[![PyPI](https://img.shields.io/pypi/v/freeboard)](https://pypi.org/project/freeboard/)
+
 ```bash
-pip install freeboard              # the SDK, zero dependencies
-pip install freeboard[research]    # plus the study code in this repo
+pip install freeboard      # the SDK, zero dependencies
 ```
+
+The SDK records episodes as sufficient statistics, writes them to a validated
+append-only log, verifies the chain, and prices a fleet — all in the standard
+library. The research code in `src/credibility/` is not published; it needs
+numpy and pandas, and is reproduced from a clone (`pip install -r
+requirements-research.txt`).
 
 ```python
 from freeboard import Recorder, ToolSpec, Capability, Reversibility
