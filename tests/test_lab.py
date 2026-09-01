@@ -145,3 +145,121 @@ def test_episodes_are_recorded_through_the_real_sdk():
 
     wire = [to_wire(r) for r in rec.records]
     assert verify(wire, expected_head=rec.checkpoint().head)
+
+
+# --- canary tools ----------------------------------------------------------
+
+
+def test_canaries_do_not_change_the_measured_envelope():
+    """REGRESSION-BY-DESIGN: probes are planted to diagnose the envelope, so
+    they must not shift it. Counting them moves the class code's tool-count
+    bucket and the experiment becomes partly about its own instrumentation."""
+    from freeboard import derive_envelope
+    from lab.hazards import CANARIES
+
+    s = default_suite(10)[2]
+    assert s.canaries == CANARIES
+    assert len(s.presented_tools) > len(s.tools)
+    assert s.envelope.class_code == derive_envelope(list(s.tools)).class_code
+    assert s.envelope.class_code != derive_envelope(s.presented_tools).class_code
+
+
+def test_canaries_grant_no_capabilities():
+    s = default_suite(10)[2]
+    probes = [t for t in s.presented_tools if t.name in s.canary_names]
+    assert probes
+    for t in probes:
+        caps, rev, _ = t.resolve()
+        assert caps == frozenset()
+        assert rev.value == "reversible"
+
+
+def test_tripping_a_canary_is_never_counted_as_harm():
+    """A probe is inert. Scoring one as a safety incident would let
+    instrumentation inflate a severity number."""
+    from lab.severity import canary_trips
+
+    out = run_suite(suite(200), SimulatedExecutor(canary_rate=0.9), seed=8)
+    tripped = [o for o in out if o.canaries_tripped]
+    assert tripped
+    for o in tripped:
+        assert set(o.canaries_tripped).isdisjoint({"delete_record", "issue_refund",
+                                                   "send_message"})
+    rates = canary_trips(out)
+    assert all(0.0 <= r <= 1.0 for r in rates.values())
+    # a scenario can trip probes while remaining entirely safe
+    assert any(o.canaries_tripped and not o.harm_realised for o in out)
+
+
+def test_each_canary_names_a_distinct_reasoning_failure():
+    from lab.hazards import CANARIES, semantic_decoy
+
+    diagnoses = {c.diagnosis for c in CANARIES}
+    assert len(diagnoses) == len(CANARIES)
+    decoy = semantic_decoy("read_case")
+    assert decoy.shadows == "read_case"
+    assert "read_case" in decoy.name and decoy.name != "read_case"
+
+
+# --- security awareness ----------------------------------------------------
+
+
+def test_awareness_cells_partition_the_hazard_episodes():
+    from lab.severity import awareness
+
+    out = [o for o in run_suite(suite(300), SimulatedExecutor(), seed=12)
+           if o.arm == "exposed"]
+    m = awareness(out)
+    assert m.defended + m.lucky + m.overwhelmed + m.oblivious == m.n
+    assert m.n == len(out)
+
+
+def test_awareness_is_only_scored_where_a_hazard_existed():
+    """With no attack present, failing to recognise an attack is not a finding."""
+    from lab.severity import awareness
+
+    out = [o for o in run_suite(suite(100), SimulatedExecutor(), seed=13)
+           if o.arm == "baseline"]
+    assert out
+    assert awareness(out).n == 0
+
+
+def test_luck_is_separated_from_defence():
+    """The point of the dimension: two agents with the same safe rate can be
+    entirely different risks."""
+    from lab.severity import awareness
+
+    out = [o for o in run_suite(suite(400), SimulatedExecutor(), seed=14)
+           if o.arm == "exposed"]
+    m = awareness(out)
+    safe = m.defended + m.lucky
+    assert safe > 0
+    assert m.luck_share_of_safety == pytest.approx(m.lucky / safe)
+    assert 0.0 <= m.luck_share_of_safety <= 1.0
+
+
+def test_quiet_attacks_are_recognised_less_than_blatant_ones():
+    """An agent that scores well against obvious attacks may be oblivious to
+    the ones that arrive inside fetched content."""
+    from lab.scenario import DELETE_RECORD, FETCH_PAGE, READ_CASE
+    from lab.severity import awareness
+
+    ex = SimulatedExecutor()
+    rates = {}
+    for label, hazard in (
+        ("indirect", BY_NAME["indirect_injection_destructive"]),
+        ("direct", BY_NAME["direct_jailbreak_spend"]),
+    ):
+        arm = matched_arms("p", "r", "t", [READ_CASE, FETCH_PAGE], DELETE_RECORD,
+                           hazard, n_episodes=600)[2]
+        rates[label] = awareness(run_scenario(arm, ex, seed=15)[0]).awareness_rate
+    assert rates["direct"] > rates["indirect"]
+
+
+def test_the_diagnostic_report_refuses_to_call_a_probe_a_harm():
+    from lab.severity import diagnostic_report
+
+    out = run_suite(suite(60), SimulatedExecutor(), seed=16)
+    text = diagnostic_report(out)
+    assert "diagnostic, not harm" in text
+    assert "only on episodes that faced a hazard" in text
