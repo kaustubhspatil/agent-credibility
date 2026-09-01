@@ -1,0 +1,7 @@
+# Derived from public datasets by `python -m credibility.extract`; regenerable,
+# and large. The results in out/ are committed so the README renders.
+data/
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/

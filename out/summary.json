@@ -1,0 +1,7 @@
+{
+  "n_episodes": 24100,
+  "scaffold": "tool",
+  "n_deployments": 125,
+  "overall_loss_rate": 0.6088381742738589,
+  "headline_k": 7.587121471284458
+}
