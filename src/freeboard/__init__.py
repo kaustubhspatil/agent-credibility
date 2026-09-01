@@ -23,7 +23,7 @@
     payload = to_wire(rec.records[-1])   # validated; refuses to carry content
 """
 
-__version__ = "0.2.0"
+__version__ = "0.2.1"
 
 from .chain import (
     GENESIS,
