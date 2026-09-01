@@ -31,6 +31,7 @@ import uuid
 from collections import Counter
 from dataclasses import dataclass, field
 
+from . import __version__ as _VERSION
 from .chain import ChainState, Checkpoint, checkpoint
 from .state import RecorderState
 from .envelope import Capability, Reversibility, TaskEnvelope, ToolSpec, derive_envelope
@@ -92,7 +93,7 @@ class EpisodeRecord:
 
     # provenance
     schema_version: str = "1.0"
-    recorder_version: str = "0.1.0"
+    recorder_version: str = _VERSION
 
 
 class Episode:

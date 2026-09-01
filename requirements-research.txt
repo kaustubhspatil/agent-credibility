@@ -1,0 +1,9 @@
+# For the research pipelines in src/credibility/ (not shipped on PyPI).
+#   pip install -r requirements-research.txt
+numpy>=1.26
+pandas>=2.1
+pyarrow>=14
+matplotlib>=3.8
+datasets>=3
+huggingface_hub>=0.24
+pytest>=8

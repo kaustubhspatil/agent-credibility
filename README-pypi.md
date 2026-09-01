@@ -1,0 +1,96 @@
+# Freeboard
+
+**Measure how much safety envelope an AI agent deployment has left — without ever seeing its data.**
+
+*Freeboard* is the distance from a ship's waterline to its deck: the margin before it is swamped, and the quantity marine underwriters measure to decide whether a vessel is insurable at all. This measures the same thing for an agent deployment.
+
+Stdlib only. No dependencies.
+
+```bash
+pip install freeboard
+```
+
+```python
+from freeboard import Recorder, ToolSpec, Capability, Reversibility
+
+rec = Recorder(
+    deployment_id="acme-prod",
+    role="customer_support",
+    tools=[
+        ToolSpec("search_orders",
+                 capabilities=frozenset({Capability.PRIVATE_DATA}),
+                 reversibility=Reversibility.REVERSIBLE),
+        ToolSpec("issue_refund",
+                 capabilities=frozenset({Capability.EXTERNAL_EFFECT}),
+                 reversibility=Reversibility.IRREVERSIBLE),
+    ],
+    declared_capabilities={Capability.PRIVATE_DATA},   # never trusted
+    state_path="/var/lib/freeboard/acme-prod.json",    # survives restarts
+)
+
+with rec.episode(task_id="ticket-8821") as ep:
+    ep.action("search_orders", output_chars=412)
+    ep.action("issue_refund")
+    ep.resolve(success=True)
+```
+
+## Content cannot leak, because it cannot get in
+
+This is not redaction. Redaction is a deny-list that strips the sensitive things someone thought of, and it has to be audited and trusted.
+
+- **No parameter accepts free text.** `action()` takes a tool name, an error flag, and `output_chars` — a *length*. Tool output never enters the SDK.
+- **Identifiers are salted and hashed** per deployment. Task ids stay linkable within a deployment without the raw value travelling.
+- **Tool names never reach the wire.** They stay in-process for entropy and capability accounting.
+- **The wire format is an allow-list.** Every field is a number, a bool, a null, a fixed enum value, or a hex digest. `validate()` refuses anything else, and `to_wire()` cannot run without it.
+
+The test that proves it, `test_canary_never_reaches_the_wire`, pushes an SSN-shaped canary into the deployment id, role, task id, tool name and description, then asserts it appears nowhere in the payload — not in a value, not in a key, not in the JSON.
+
+A complete record is counts, hashes and enums, and this is all of it:
+
+```json
+{"deployment_id":"fdf3d47fa257542d","envelope_class":"C111-I0","episode_id":"a6b1be3e8c254f59",
+ "error_rate":0.0,"escalated":false,"manifest_hash":"fa89b11ed297a47d",
+ "max_reversibility":"irreversible","n_actions":6,"n_distinct_tools":3,"n_irreversible":1,
+ "n_mutating":1,"observed_capabilities":["external_effect","private_data","untrusted_input"],
+ "output_chars":4101,"pass_index":1,"repeat_rate":0.6,"resolved":true,"reward":null,
+ "role":"customer_support","seq":0,"prev_hash":"000…","entry_hash":"5da5…",
+ "task_hash":"5ddb12eaa459eb73","tool_entropy":1.251629}
+```
+
+## The task envelope is derived, not declared
+
+A declared scope is an incentive to understate — premiums fall as scope narrows. So scope is derived from the tool manifest the agent is actually wired to, and the declaration is kept only as a cross-check. Three views are tracked and none is collapsed into a verdict:
+
+| view | source | trusted |
+|---|---|---|
+| derived | the granted tool manifest | yes |
+| observed | what the agent actually exercised | yes |
+| declared | what the customer said | no |
+
+Disagreement is the signal, with understatement weighted double. `TaskEnvelope.rule_of_two_violated` flags an agent holding all three of untrusted input, private data and external effect — a complete attack chain. `class_code` keys on capabilities rather than tool names, so two deployments with the same powers fall in the same risk class.
+
+## Tamper-evident sequencing
+
+Each record commits to the one before it:
+
+```
+entry_hash(n) = sha256( prev_hash(n) || canonical_json(record without hashes) )
+```
+
+Deleting an episode leaves a sequence gap; editing one breaks its `entry_hash`; reordering breaks both. State persists across restarts, so an ephemeral container resumes its chain rather than generating a discontinuity.
+
+**What chaining alone does not prove:** a party who deletes a record and recomputes every hash after it produces a chain that verifies perfectly. Chaining is tamper-*evident* only once the head has been committed somewhere that party cannot rewrite — which is what `Checkpoint` is for. Any EU AI Act Article 12 claim rests on the checkpoints being anchored, not on the chain existing. That limitation is a passing test in the repo, not a footnote.
+
+## OpenTelemetry
+
+`to_otel_attributes()` returns `gen_ai.*` and `agent.credibility.*` span attributes for an existing tracer, validated on the way out. No OTel dependency.
+
+## Status
+
+Early. The API may change before 1.0. There is no transport layer and no certificate renderer — both are deliberately left for the deployment that needs them.
+
+The research behind it — what a pooled prior across agent deployments is worth, measured on ~40,000 episodes across three corpora, with the negative controls — lives in the repository.
+
+**Source, research and guides:** https://github.com/kaustubhspatil/agent-credibility
+
+Apache-2.0.
