@@ -169,6 +169,79 @@ Three consequences, and only the first is comfortable:
 
 Run-to-run noise is also large — 0.0794, comparable to task mix at 0.0765. The same agent, given the same task twice, often disagrees with itself. That is a floor on how well *any* per-deployment estimate can do.
 
+## The recorder
+
+Measuring K on a corpus somebody else collected is research. Instrumenting a live fleet is the product. `credibility.recorder` is the collection half: **stdlib only, no dependencies**, drops into any agent loop.
+
+```python
+from credibility.recorder import Recorder, ToolSpec, Capability, Reversibility
+
+rec = Recorder(
+    deployment_id="acme-prod",
+    role="customer_support",
+    tools=[
+        ToolSpec("search_orders",
+                 capabilities=frozenset({Capability.PRIVATE_DATA}),
+                 reversibility=Reversibility.REVERSIBLE),
+        ToolSpec("issue_refund",
+                 capabilities=frozenset({Capability.EXTERNAL_EFFECT}),
+                 reversibility=Reversibility.IRREVERSIBLE),
+    ],
+    declared_capabilities={Capability.PRIVATE_DATA},   # never trusted
+)
+
+with rec.episode(task_id="ticket-8821") as ep:
+    ep.action("search_orders", output_chars=412)
+    ep.action("issue_refund")
+    ep.resolve(success=True)
+```
+
+`PYTHONPATH=src python examples/quickstart.py` runs a three-customer fleet end to end and prices it.
+
+### Content cannot leak, because it cannot get in
+
+The usual arrangement is a redaction pipeline: a deny-list that strips the sensitive things someone thought of, which has to be audited and trusted. This inverts it.
+
+- **The API has no parameter that accepts free text.** `action()` takes a tool name, an error flag and `output_chars` — a *length*. The tool output never enters the SDK, so it cannot be forgotten in a buffer or logged by accident.
+- **Identifiers are salted and hashed** per deployment. Task ids are routinely email addresses or account numbers; they stay linkable within a deployment (which is what credibility needs) without the raw value travelling.
+- **Tool names never reach the wire.** The recorder holds them in-process to compute entropy and capability usage; the outbound record carries counts and hashes only.
+- **The wire format is an allow-list.** Every field must be a number, a bool, a null, a value from a fixed enum, or a hex digest. `validate()` refuses anything else, and `to_wire()` cannot be called without it running.
+
+The test that matters is `test_canary_never_reaches_the_wire`: an `SSN`-shaped canary is pushed into the deployment id, the role, the task id, the tool name and its description, and the assertion is that it appears nowhere in the payload — not in a value, not in a key, not in the JSON. That test is the privacy review.
+
+A full record looks like this, and this is all of it:
+
+```json
+{"deployment_id":"fdf3d47fa257542d","envelope_class":"C111-I0","episode_id":"a6b1be3e8c254f59",
+ "error_rate":0.0,"escalated":false,"manifest_hash":"fa89b11ed297a47d",
+ "max_reversibility":"irreversible","n_actions":6,"n_distinct_tools":3,"n_irreversible":1,
+ "n_mutating":1,"observed_capabilities":["external_effect","private_data","untrusted_input"],
+ "output_chars":4101,"pass_index":1,"repeat_rate":0.6,"resolved":true,"reward":null,
+ "role":"customer_support","task_hash":"5ddb12eaa459eb73","tool_entropy":1.251629}
+```
+
+### The task envelope is derived, not declared
+
+A declared envelope is an incentive to lie — premiums fall as scope narrows, and a wrong class label measurably costs 2.6–2.9× in day-zero pricing error. So scope is derived from the tool manifest the agent is actually wired to, and the declaration is kept only as a cross-check.
+
+Three views are tracked and **none is resolved into a single verdict**:
+
+| view | source | trusted |
+|---|---|---|
+| derived | the granted tool manifest | yes |
+| observed | what the agent actually exercised | yes |
+| declared | what the customer said | no |
+
+Disagreement between them is itself the signal. Understatement is weighted double, because it is the direction a premium-minimising customer errs in. In the quickstart the customer declares `private_data`, the wiring grants all three capabilities, and the recorder reports a **rule-of-two violation** with a divergence score of 4.0 — the agent can read untrusted email, reach private orders, and issue irreversible refunds, which is a complete attack chain.
+
+The `class_code` (`C111-I0`) keys on *powers*, not tool names: two customers whose differently named tools grant the same capabilities are the same risk class and should price the same. The manifest hash tracks powers too — rewording a tool's description does not change it, granting that tool a new capability does.
+
+Tools that declare nothing fall back to keyword priors, and anything inferred that way is counted in `inferred_tools` so a premium can be loaded for the uncertainty. A guess is flagged as a guess.
+
+### OpenTelemetry
+
+`to_otel_attributes()` emits `gen_ai.*` and `agent.credibility.*` span attributes for an integrator's existing tracer, validated on the way out. The package takes no OTel dependency.
+
 ## Trusting the number
 
 The estimator is validated against a closed-form answer before use. For a Beta(a,b)-Bernoulli class the credibility constant is exactly `a + b`, so there is a known target: `pytest` checks recovery across three concentration regimes and four seeds (16 tests).
@@ -202,6 +275,8 @@ Data: [`SWE-bench/SWE-smith-trajectories`](https://huggingface.co/datasets/SWE-b
 | `src/credibility/extract.py` | trajectories → per-episode behavioural features |
 | `src/credibility/buhlmann.py` | Bühlmann-Straub variance components, Z, bootstrap CI |
 | `src/credibility/experiment.py` | E1 class definitions, E3 holdout sweep, E4 cold start, E5 signals |
+| `src/credibility/recorder/` | the SDK: derived envelope, episode recording, wire format |
+| `examples/quickstart.py` | instrument a fleet, emit records, price it |
 | `src/credibility/cx.py` | six-role corpus: per-role K, four-level decomposition |
 | `src/credibility/cx_probe.py` | schema probe for the gated corpus, reads footers only |
 | `src/credibility/webagents.py` | AgentRewardBench expert annotations -> web-agent episodes |
