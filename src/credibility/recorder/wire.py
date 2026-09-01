@@ -27,6 +27,7 @@ from .episode import EpisodeRecord
 SCHEMA_VERSION = "1.0"
 
 _HEX16 = re.compile(r"\A[0-9a-f]{16}\Z")
+_HEX64 = re.compile(r"\A[0-9a-f]{64}\Z")
 _SLUG = re.compile(r"\A[a-z0-9][a-z0-9_.\-]{0,63}\Z")
 _CLASS_CODE = re.compile(r"\AC[01]{3}-[VCI][0-4]\Z")
 _VERSION = re.compile(r"\A[0-9]+\.[0-9]+(\.[0-9]+)?\Z")
@@ -72,6 +73,9 @@ _RULES: dict[str, tuple[Any, bool]] = {
     "output_chars": ("int", False),
     "duration_ms": ("int", False),
     "observed_capabilities": ("caps", False),
+    "seq": ("int", False),
+    "prev_hash": (_HEX64, False),
+    "entry_hash": (_HEX64, False),
     "schema_version": (_VERSION, False),
     "recorder_version": (_VERSION, False),
 }
@@ -157,6 +161,9 @@ _OTEL_MAP = {
     "task_hash": "agent.credibility.task",
     "pass_index": "agent.credibility.pass",
     "schema_version": "agent.credibility.schema",
+    "seq": "agent.credibility.seq",
+    "entry_hash": "agent.credibility.entry_hash",
+    "prev_hash": "agent.credibility.prev_hash",
 }
 
 SPAN_NAME = "agent.episode"

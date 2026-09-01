@@ -23,6 +23,15 @@
     payload = to_wire(rec.records[-1])   # validated; refuses to carry content
 """
 
+from .chain import (
+    GENESIS,
+    ChainState,
+    Checkpoint,
+    VerificationResult,
+    canonical,
+    checkpoint,
+    verify,
+)
 from .envelope import (
     Capability,
     Divergence,
@@ -45,6 +54,13 @@ from .wire import (
 )
 
 __all__ = [
+    "ChainState",
+    "Checkpoint",
+    "GENESIS",
+    "VerificationResult",
+    "canonical",
+    "checkpoint",
+    "verify",
     "Capability",
     "Divergence",
     "Episode",
