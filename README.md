@@ -169,12 +169,19 @@ Three consequences, and only the first is comfortable:
 
 Run-to-run noise is also large — 0.0794, comparable to task mix at 0.0765. The same agent, given the same task twice, often disagrees with itself. That is a floor on how well *any* per-deployment estimate can do.
 
-## The recorder
+## Freeboard, the SDK
 
-Measuring K on a corpus somebody else collected is research. Instrumenting a live fleet is the product. `credibility.recorder` is the collection half: **stdlib only, no dependencies**, drops into any agent loop.
+*Freeboard* is the distance from a ship's waterline to its deck — the margin before it is swamped, and the quantity marine underwriters measure to decide whether a vessel is insurable at all. It is what this measures for an agent deployment: how much safety envelope is left.
+
+Measuring K on a corpus somebody else collected is research. Instrumenting a live fleet is the product. `freeboard` is the collection half: **stdlib only, no dependencies**, drops into any agent loop.
+
+```bash
+pip install freeboard              # the SDK, zero dependencies
+pip install freeboard[research]    # plus the study code in this repo
+```
 
 ```python
-from credibility.recorder import Recorder, ToolSpec, Capability, Reversibility
+from freeboard import Recorder, ToolSpec, Capability, Reversibility
 
 rec = Recorder(
     deployment_id="acme-prod",
@@ -289,7 +296,7 @@ Data: [`SWE-bench/SWE-smith-trajectories`](https://huggingface.co/datasets/SWE-b
 | `src/credibility/extract.py` | trajectories → per-episode behavioural features |
 | `src/credibility/buhlmann.py` | Bühlmann-Straub variance components, Z, bootstrap CI |
 | `src/credibility/experiment.py` | E1 class definitions, E3 holdout sweep, E4 cold start, E5 signals |
-| `src/credibility/recorder/` | the SDK: derived envelope, episode recording, wire format |
+| `src/freeboard/` | the SDK: derived envelope, episode recording, wire format |
 | `examples/quickstart.py` | instrument a fleet, emit records, price it |
 | `src/credibility/cx.py` | six-role corpus: per-role K, four-level decomposition |
 | `src/credibility/cx_probe.py` | schema probe for the gated corpus, reads footers only |
