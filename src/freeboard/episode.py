@@ -32,6 +32,7 @@ from collections import Counter
 from dataclasses import dataclass, field
 
 from .chain import ChainState, Checkpoint, checkpoint
+from .state import RecorderState
 from .envelope import Capability, Reversibility, TaskEnvelope, ToolSpec, derive_envelope
 
 
@@ -246,17 +247,21 @@ class Recorder:
     declared_capabilities: set[Capability] | None = None
     salt: str = ""
     sink: object | None = None  # anything with .write(EpisodeRecord)
+    state_path: str | None = None  # persist salt + chain across restarts
 
     def __post_init__(self) -> None:
-        if not self.salt:
-            # A per-deployment salt keeps hashed ids from being reversible via
-            # a rainbow table of likely task ids. Stable across a process; an
-            # integrator persisting records across restarts should pin it.
-            self.salt = uuid.uuid4().hex
+        # A per-deployment salt keeps hashed ids from being reversible via a
+        # rainbow table of likely task ids. Without `state_path` it lives only
+        # for this process, which breaks the chain and re-keys every task hash
+        # on restart -- fine for a notebook, wrong for anything containerised.
+        self.state = RecorderState.load_or_create(
+            self.state_path, self.deployment_id, self.salt
+        )
+        self.salt = self.state.salt
         self.envelope: TaskEnvelope = derive_envelope(self.tools)
         self.tool_index: dict[str, ToolSpec] = {t.name: t for t in self.tools}
         self.deployment_hash = _hash_id(self.deployment_id, self.salt)
-        self.chain = ChainState()
+        self.chain = self.state.chain_state()
         self._records: list[EpisodeRecord] = []
         self._observed: set[Capability] = set()
         self._used_tools: set[str] = set()
@@ -289,6 +294,14 @@ class Recorder:
         record.seq = seq
         record.prev_hash = prev
         record.entry_hash = digest
+
+        # Persist the advanced head before the record can reach a sink. If the
+        # process dies between the two, the state is ahead of what was sent,
+        # which verification reports as a gap -- the safe direction. The
+        # reverse would silently re-issue a sequence number.
+        if self.state_path is not None:
+            self.state.absorb(self.chain)
+            self.state.save(self.state_path)
 
         self._records.append(record)
         self._observed |= {Capability(c) for c in record.observed_capabilities}
