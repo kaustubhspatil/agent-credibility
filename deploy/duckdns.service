@@ -1,0 +1,8 @@
+[Unit]
+Description=Point the DuckDNS name at this host's current IP
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/duckdns-update.sh

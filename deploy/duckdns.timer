@@ -1,0 +1,12 @@
+[Unit]
+Description=Refresh DuckDNS on boot and every 15 minutes
+
+[Timer]
+# OnBootSec matters more than the interval: the address only changes when the
+# instance restarts, and after a preemption that is exactly when it happens.
+OnBootSec=30s
+OnUnitActiveSec=15min
+Persistent=true
+
+[Install]
+WantedBy=timers.target
