@@ -1,0 +1,7 @@
+[Unit]
+Description=Snapshot the Freeboard bureau database
+After=bureau.service
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash /opt/freeboard/deploy/backup.sh /var/backups/freeboard
