@@ -4,6 +4,17 @@
 #
 #   sudo bash install.sh [git-ref]
 #
+# ALWAYS FETCH THIS SCRIPT BY COMMIT SHA, not by branch:
+#
+#   SHA=$(git rev-parse HEAD)
+#   curl -fsSL https://raw.githubusercontent.com/<owner>/<repo>/$SHA/deploy/install.sh
+#
+# raw.githubusercontent.com caches branch URLs. Fetching .../main/deploy/install.sh
+# can silently serve a stale script, so a deploy appears to run and quietly does
+# nothing -- which is exactly how this box sat several commits behind while two
+# separate fixes were "deployed". A SHA URL is content-addressed and cannot go
+# stale, and it makes the deploy reproducible besides.
+#
 # Deliberately no TLS here. The service binds to 127.0.0.1 and a reverse proxy
 # in front terminates TLS -- see deploy/caddy.example. Putting certificate
 # handling inside a stdlib http.server would be the wrong place for it.

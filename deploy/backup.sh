@@ -13,6 +13,9 @@
 # `VACUUM INTO` is the correct primitive. It takes a consistent snapshot of the
 # whole database, WAL included, into a single new file, without stopping the
 # service.
+# A snapshot that never leaves the VM does not survive the VM. Copy it off --
+# especially on a host whose billing account is closed, where the provider may
+# suspend and later delete the disk.
 set -euo pipefail
 
 DEST="${1:-/var/backups/freeboard}"
