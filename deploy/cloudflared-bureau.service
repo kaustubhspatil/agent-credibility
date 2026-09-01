@@ -1,0 +1,24 @@
+[Unit]
+Description=Cloudflare tunnel for the Freeboard bureau
+Documentation=https://developers.cloudflare.com/cloudflare-one/connections/connect-apps
+After=network-online.target bureau.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=sentinel
+# A quick tunnel needs no Cloudflare account, which is why it is here: the GCP
+# billing account is closed, so no firewall rule can be created and no port can
+# be opened. An outbound tunnel needs neither, and has no inbound attack
+# surface at all.
+#
+# It is NOT durable: the hostname changes on every restart and Cloudflare give
+# no uptime guarantee. For anything a design partner points at, replace --url
+# with a named tunnel (needs a Cloudflare account) or restore GCP billing and
+# use deploy/caddy.example instead.
+ExecStart=/usr/local/bin/cloudflared tunnel --no-autoupdate --url http://127.0.0.1:8080
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
