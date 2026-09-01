@@ -2,9 +2,28 @@
 
 **Does a pooled prior across agent deployments earn its keep, or does it collapse into the industry average that insurers reject?**
 
-It earns its keep. On 24,100 real agent episodes across 125 deployments, the credibility constant is **K ≈ 7.6 [4.8, 12.2]** — a deployment reaches equal weight between the pooled class prior and its own experience after **about eight episodes**, and 90% weight after roughly 68.
+It earns its keep — and the constant behind it replicates across corpora that share nothing.
 
-This is the kill-switch experiment for an agent-insurance "base rate bureau". It was built to fail loudly if the idea does not work.
+## The replication
+
+| | corpus | models | K | 5–95% |
+|---|---|---|---:|---|
+| coding agent | SWE-smith, 24,100 episodes | Claude 3.7 Sonnet | **7.6** | [4.8, 12.2] |
+| coding agent | cx-cmu `swebench`, 613 episodes | DeepSeek, Qwen, Gemini | **7.0** | [4.6, 12.1] |
+
+Two independent measurements of the same quantity: different task sets, scored differently, run by different model families, sharing no code path beyond the estimator. They agree to within a rounding error and their intervals almost coincide. Neither was fitted to the other, and the second was not planned.
+
+That is the load-bearing claim here — **K is a property of the agent's role, not an artifact of a dataset** — which is what makes a per-role prior something you can publish, sell and re-use rather than a number that dies with the corpus it came from.
+
+![per role K](out/fig6_per_role_k.png)
+
+And it is emphatically *per role*: across five roles K spans 7×, from a research agent at 2.1 to an ops agent at 15.0. A quoted K that does not name its role means nothing.
+
+## What this is
+
+The kill-switch experiment for an agent-insurance "base rate bureau", built to fail loudly if the idea does not work. Three corpora, ~40,000 episodes, 16 tests, every negative control reported.
+
+It did not fail — but it did force one headline down. An early study put the share of risk explained by an agent's role at 54%. A larger corpus that could separate a level the first could not see puts it at **9%**, with task mix at 66%. That correction is below in full, and it shapes the product design more than any of the positive results do.
 
 ![credibility curve](out/fig1_credibility_curve.png)
 
