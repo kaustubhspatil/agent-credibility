@@ -167,3 +167,32 @@ def test_client_raises_where_the_sink_swallows(bureau, tmp_path):
 
 def test_prior_route(bureau, tmp_path):
     assert BureauClient(bureau).prior("ops")["available"] is False
+
+
+def test_the_client_identifies_itself(bureau, tmp_path):
+    """REGRESSION: urllib's default User-Agent ("Python-urllib/3.x") reads as a
+    bot signature to common edge protections. Cloudflare's Browser Integrity
+    Check returns 1010 for it, so a bureau behind any CDN rejected every SDK
+    request while happily accepting curl. This broke the first real deployment."""
+    import urllib.request
+
+    from freeboard.client import USER_AGENT
+
+    assert USER_AGENT.startswith("freeboard/")
+    assert "urllib" not in USER_AGENT
+
+    seen = {}
+    real = urllib.request.Request
+
+    def capture(url, data=None, method=None, headers=None, **kw):
+        seen.update(headers or {})
+        return real(url, data=data, method=method, headers=headers or {}, **kw)
+
+    urllib.request.Request = capture
+    try:
+        BureauClient(bureau).health()
+    finally:
+        urllib.request.Request = real
+
+    assert seen.get("User-Agent") == USER_AGENT
+    assert seen.get("Accept") == "application/json"
