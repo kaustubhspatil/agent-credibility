@@ -169,6 +169,11 @@ Three consequences, and only the first is comfortable:
 
 Run-to-run noise is also large — 0.0794, comparable to task mix at 0.0765. The same agent, given the same task twice, often disagrees with itself. That is a floor on how well *any* per-deployment estimate can do.
 
+## Guides
+
+- **[docs/DEMO.md](docs/DEMO.md)** — a 15-minute walkthrough ordered by who is in the room: the privacy objection, the derived envelope, the tamper-evidence, the pricing. Includes objection handling and an explicit list of what not to claim.
+- **[docs/STUDY.md](docs/STUDY.md)** — the research: the mathematics in one page, how the estimator was validated before use, the three corpora, how to reproduce every number, how to read each figure, and the two results that went the wrong way.
+
 ## Freeboard, the SDK
 
 *Freeboard* is the distance from a ship's waterline to its deck — the margin before it is swamped, and the quantity marine underwriters measure to decide whether a vessel is insurable at all. It is what this measures for an agent deployment: how much safety envelope is left.

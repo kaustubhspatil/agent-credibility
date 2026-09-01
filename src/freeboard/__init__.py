@@ -43,6 +43,7 @@ from .envelope import (
     manifest_hash,
 )
 from .episode import Episode, EpisodeRecord, Recorder
+from .state import RecorderState, StateError
 from .wire import (
     SCHEMA_VERSION,
     SPAN_NAME,
@@ -66,6 +67,8 @@ __all__ = [
     "Episode",
     "EpisodeRecord",
     "Recorder",
+    "RecorderState",
+    "StateError",
     "Reversibility",
     "SCHEMA_VERSION",
     "SPAN_NAME",
