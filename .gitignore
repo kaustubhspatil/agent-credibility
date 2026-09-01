@@ -10,3 +10,6 @@ __pycache__/
 dist/
 build/
 *.egg-info/
+
+# strategy, pitch and internal runbooks -- never tracked
+docs/_private/
