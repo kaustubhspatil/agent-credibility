@@ -10,7 +10,7 @@ import json
 
 import pytest
 
-from credibility.recorder import (
+from freeboard import (
     GENESIS,
     Capability,
     Recorder,
@@ -81,7 +81,7 @@ def test_output_chars_takes_a_length_not_the_output():
     """The API has no parameter that accepts tool output."""
     import inspect
 
-    from credibility.recorder.episode import Episode
+    from freeboard.episode import Episode
 
     sig = inspect.signature(Episode.action)
     assert set(sig.parameters) == {"self", "tool", "error", "output_chars"}

@@ -17,7 +17,7 @@ from __future__ import annotations
 import random
 
 from credibility.buhlmann import components, credibility_estimate
-from credibility.recorder import (
+from freeboard import (
     Capability,
     Recorder,
     Reversibility,

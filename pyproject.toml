@@ -3,13 +3,14 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "agent-credibility"
+name = "freeboard"
 version = "0.1.0"
-description = "Bühlmann credibility for AI agent deployments: does a pooled prior earn its keep?"
+description = "Freeboard: measure how much safety envelope an AI agent deployment has left, without ever seeing its data."
 requires-python = ">=3.10"
-dependencies = ["numpy>=1.26", "pandas>=2.1", "pyarrow>=14"]
+dependencies = []  # the SDK is stdlib only, on purpose
 
 [project.optional-dependencies]
+research = ["numpy>=1.26", "pandas>=2.1", "pyarrow>=14"]
 data = ["datasets>=3", "huggingface_hub>=0.24"]
 plots = ["matplotlib>=3.8"]
 dev = ["pytest>=8"]
