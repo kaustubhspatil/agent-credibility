@@ -22,7 +22,10 @@ mkdir -p "$APP_DIR" "$DATA_DIR"
 # this one belongs to the service user while the installer runs as root. Without
 # this the UPDATE path fails ("dubious ownership") while a fresh install
 # succeeds -- so the script looks idempotent and is not.
-git config --global --add safe.directory "$APP_DIR" 2>/dev/null || true
+# --system, not --global: sudo preserves the invoking user's HOME, so --global
+# writes to /home/<user>/.gitconfig while git itself runs as uid 0 and reads
+# /root/.gitconfig. The setting silently lands where nothing will read it.
+git config --system --add safe.directory "$APP_DIR" 2>/dev/null || true
 
 echo "==> source at ref ${REF}"
 if [ -d "$APP_DIR/.git" ]; then
