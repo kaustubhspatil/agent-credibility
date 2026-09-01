@@ -1,0 +1,24 @@
+[Unit]
+Description=Cloudflare named tunnel for the Freeboard bureau
+Documentation=https://developers.cloudflare.com/cloudflare-one/connections/connect-apps
+After=network-online.target bureau.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=sentinel
+# A named tunnel, unlike the quick tunnel it replaces, keeps its hostname
+# across restarts. That is the difference between something that proves the
+# path works and something a design partner can configure once and forget.
+ExecStart=/usr/local/bin/cloudflared --config /etc/cloudflared/config.yml tunnel run
+Restart=always
+RestartSec=5
+
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/etc/cloudflared
+
+[Install]
+WantedBy=multi-user.target
