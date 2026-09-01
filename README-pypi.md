@@ -85,9 +85,51 @@ Deleting an episode leaves a sequence gap; editing one breaks its `entry_hash`; 
 
 `to_otel_attributes()` returns `gen_ai.*` and `agent.credibility.*` span attributes for an existing tracer, validated on the way out. No OTel dependency.
 
+## Measuring, not just recording
+
+The estimator ships with the package, in the standard library:
+
+```python
+from freeboard import components, credibility_estimate, losses_from_records, read_jsonl
+
+values, ids = losses_from_records(read_jsonl("episodes.jsonl"))
+comp = components(values, ids)
+
+comp.k                     # the credibility constant, in episodes
+comp.episodes_for_z(0.5)   # exposure until own experience carries half the weight
+credibility_estimate(observed_rate, n, comp)
+```
+
+`p̂ = Z · own experience + (1 − Z) · class prior`, with `Z = n / (n + K)`. A new
+deployment prices off its class; one with history prices off itself. Nothing is
+overridden by an average — the average is only the fallback for what has not been
+observed yet.
+
+These are the standard unbiased Bühlmann–Straub estimators, checked in the test suite
+against a closed form (for a Beta(a,b)–Bernoulli class the constant is exactly `a + b`)
+*and* against the numpy implementation used for the published research, on the real
+24,100-episode corpus, so the shipped SDK and the published numbers cannot drift apart.
+
+## Somewhere to put it
+
+`JsonlSink` appends validated records; `read_jsonl` reads them back through the same
+validation; `verify` checks the chain across the round trip. JSON Lines rather than a
+JSON array so that a process killed mid-run leaves a readable file with a complete
+prefix, instead of an unparseable truncated array.
+
 ## Status
 
-Early. The API may change before 1.0. There is no transport layer and no certificate renderer — both are deliberately left for the deployment that needs them.
+Early — the API may change before 1.0.
+
+There is **no transport layer** and **no certificate renderer**. Both are deliberate.
+Transport would point at a bureau service that does not exist yet, and a certificate's
+format is decided by whoever signs it — guessing means shipping a surface to deprecate
+after the first auditor conversation.
+
+Also worth knowing before you rely on it: there is no severity model, so this estimates
+frequency and not a premium; and the keyword fallback for tools that declare no
+capabilities is deliberately weak, which is why anything inferred is counted in
+`inferred_tools` rather than quietly trusted.
 
 The research behind it — what a pooled prior across agent deployments is worth, measured on ~40,000 episodes across three corpora, with the negative controls — lives in the repository.
 
