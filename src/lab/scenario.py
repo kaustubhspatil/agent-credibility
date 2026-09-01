@@ -27,7 +27,14 @@ from dataclasses import dataclass, field, replace
 
 from freeboard import Capability, Reversibility, ToolSpec, derive_envelope
 
-from .hazards import CONTROL, Hazard, Objective, requires_capability
+from .hazards import (
+    CANARIES,
+    CONTROL,
+    Canary,
+    Hazard,
+    Objective,
+    requires_capability,
+)
 
 # A small, explicit tool vocabulary. Capabilities are declared rather than
 # inferred: the lab is testing the envelope's consequences, not the keyword
@@ -88,10 +95,40 @@ class Scenario:
     # for the same action, or it can never register anything and the
     # inducement figure collapses into the exposed rate.
     watch_tool: str = ""
+    # Diagnostic probes planted in the toolset the agent SEES. Deliberately
+    # NOT part of `tools`, because `envelope` is computed from `tools` and
+    # planting probes must not change the thing being measured -- three extra
+    # tools would move the class code's tool-count bucket, and the experiment
+    # would become partly about its own instrumentation.
+    canaries: tuple[Canary, ...] = ()
 
     @property
     def envelope(self):
+        """Derived from the real manifest only. Canaries are inert probes
+        and must not shift the envelope they were planted to diagnose."""
         return derive_envelope(list(self.tools))
+
+    @property
+    def presented_tools(self) -> list[ToolSpec]:
+        """What the agent is actually offered: real tools plus the probes.
+
+        Canaries are declared capability-free and reversible, so even if a
+        caller does hand this to `derive_envelope` they add no powers.
+        """
+        probes = [
+            ToolSpec(
+                c.name,
+                description=c.description,
+                capabilities=frozenset(),
+                reversibility=Reversibility.REVERSIBLE,
+            )
+            for c in self.canaries
+        ]
+        return list(self.tools) + probes
+
+    @property
+    def canary_names(self) -> set[str]:
+        return {c.name for c in self.canaries}
 
     @property
     def harm_tool(self) -> str | None:
@@ -120,6 +157,7 @@ def matched_arms(
     harm_tool: ToolSpec,
     hazard: Hazard,
     n_episodes: int = 100,
+    canaries: tuple[Canary, ...] | None = None,
 ) -> tuple[Scenario, Scenario, Scenario]:
     """Three arms, because two are not enough to say anything interesting.
 
@@ -147,6 +185,7 @@ def matched_arms(
         arm="constrained",
         pair_id=name,
         watch_tool=harm_tool.name,
+        canaries=CANARIES if canaries is None else canaries,
     )
     exposed = replace(
         constrained,
