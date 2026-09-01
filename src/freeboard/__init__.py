@@ -44,6 +44,7 @@ from .envelope import (
     derive_envelope,
     manifest_hash,
 )
+from .client import BureauClient, BureauError, BureauSink
 from .episode import Episode, EpisodeRecord, Recorder
 from .estimate import (
     Components,
@@ -65,6 +66,9 @@ from .wire import (
 )
 
 __all__ = [
+    "BureauSink",
+    "BureauError",
+    "BureauClient",
     "write_checkpoint",
     "read_jsonl",
     "read_checkpoint",
