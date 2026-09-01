@@ -1,0 +1,30 @@
+# Named tunnel config for the Freeboard bureau.
+#
+#   sudo install -m 640 -o sentinel -g sentinel cloudflared-config.example.yml \
+#        /etc/cloudflared/config.yml
+#   # then edit: tunnel id, credentials path, hostname
+#
+# Unlike a quick tunnel, this hostname is stable across restarts, which is the
+# whole reason to bother: a design partner configures the endpoint once.
+
+tunnel: REPLACE_WITH_TUNNEL_ID
+credentials-file: /etc/cloudflared/REPLACE_WITH_TUNNEL_ID.json
+
+# Keep the connection warm so a restart does not cost a cold start on the first
+# partner request.
+no-autoupdate: true
+protocol: quic
+
+ingress:
+  - hostname: REPLACE_WITH_HOSTNAME      # e.g. bureau.yourdomain.com
+    service: http://127.0.0.1:8080
+    originRequest:
+      # The bureau answers in milliseconds; a long timeout only helps an
+      # attacker hold connections open.
+      connectTimeout: 10s
+      # An accountless ingest endpoint should not also be a slow-loris target.
+      keepAliveTimeout: 30s
+
+  # Cloudflare requires a catch-all. Anything not the bureau hostname is
+  # refused here rather than reaching the application.
+  - service: http_status:404
