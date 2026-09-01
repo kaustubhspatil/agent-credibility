@@ -202,6 +202,8 @@ def main(out_dir: str) -> None:
     k_by_class(e1, out / "fig3_k_by_class.png")
     behavioural(e5, out / "fig4_behavioural.png")
     role_cold_start(out)
+    per_role_k(out)
+    risk_decomposition(out)
     print(f"figures -> {out}")
 
 
@@ -249,6 +251,87 @@ def role_cold_start(out: Path) -> None:
     )
     fig.tight_layout()
     fig.savefig(out / "fig5_role_cold_start.png", bbox_inches="tight")
+    plt.close(fig)
+
+
+def per_role_k(out: Path) -> None:
+    """One credibility constant per role, with bootstrap intervals."""
+    f = out / "cx_per_role_k.csv"
+    if not f.exists():
+        return
+    d = pd.read_csv(f).dropna(subset=["k"]).sort_values("k")
+
+    fig, ax = plt.subplots(figsize=(7.6, 0.62 * len(d) + 2.0))
+    y = np.arange(len(d))
+    identified = d["k_hi"] < 100
+    for i, (_, r) in enumerate(d.iterrows()):
+        colour = BLUE if r["k_hi"] < 100 else GREY
+        ax.plot([r["k_lo"], r["k_hi"]], [i, i], color=colour, lw=2.4,
+                solid_capstyle="butt", alpha=0.45)
+        ax.plot([r["k"]], [i], "o", color=colour, ms=7, zorder=5)
+        ax.text(r["k_hi"] * 1.15, i, f'  K = {r["k"]:.1f}', va="center",
+                fontsize=9, color=GREY)
+
+    ax.set_yticks(y)
+    ax.set_yticklabels(
+        [f'{r.role}  ({int(r.n_deployments)} dep.)' for _, r in d.iterrows()],
+        fontsize=9.5,
+    )
+    ax.invert_yaxis()
+    ax.set_xscale("log")
+    ax.set_xlabel("K  —  episodes until own experience carries half the weight")
+    ax.grid(axis="y", visible=False)
+    _title(
+        ax,
+        "There is no universal K",
+        "One credibility constant per agent role, 5-95% bootstrap interval. "
+        "Grey = too few deployments to identify.",
+    )
+    fig.tight_layout()
+    fig.savefig(out / "fig6_per_role_k.png", bbox_inches="tight")
+    plt.close(fig)
+
+
+def risk_decomposition(out: Path) -> None:
+    """Where risk variation actually lives, once pass noise is removed."""
+    import json
+
+    f = out / "cx_decomposition.json"
+    if not f.exists():
+        return
+    d = json.loads(f.read_text())
+    parts = [
+        ("task mix within a deployment", d["share_task_mix"], OCHRE),
+        ("deployment within a role", d["share_deployment"], BLUE),
+        ("role", d["share_role"], AQUA),
+    ]
+
+    fig, ax = plt.subplots(figsize=(7.6, 2.1))
+    left = 0.0
+    for label, share, colour in parts:
+        ax.barh([0], [share], left=left, color=colour, height=0.5)
+        if share > 0.06:
+            ax.text(left + share / 2, 0, f"{share:.0%}", ha="center", va="center",
+                    color="white", fontweight="600", fontsize=11)
+        left += share
+
+    handles = [plt.Rectangle((0, 0), 1, 1, color=c) for _, _, c in parts]
+    ax.legend(handles, [lbl for lbl, _, _ in parts], loc="upper center",
+              bbox_to_anchor=(0.5, -0.18), ncol=3, fontsize=9)
+    ax.set_xlim(0, 1)
+    ax.set_yticks([])
+    ax.set_xticks([])
+    ax.grid(visible=False)
+    for side in ("left", "bottom"):
+        ax.spines[side].set_visible(False)
+    _title(
+        ax,
+        "Most risk variation is task mix, not identity",
+        "Systematic variance only; pass-to-pass noise on identical tasks is "
+        "removed first.",
+    )
+    fig.tight_layout()
+    fig.savefig(out / "fig7_risk_decomposition.png", bbox_inches="tight")
     plt.close(fig)
 
 

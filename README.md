@@ -106,6 +106,50 @@ Re-running the power analysis at the web study's actual size (54 deployments, me
 
 105 trajectories were annotated twice. Expert-vs-expert agreement: κ = 0.755 (failure), 0.769 (looping), 0.646 (side effect). So roughly 11% of failure labels are disagreements between qualified humans — a floor on EPV that no model can go below, and a reminder that "ground truth" here is a judgement.
 
+## Six roles: the strongest study, and a correction
+
+[cx-cmu/agent_trajectories](https://huggingface.co/datasets/cx-cmu/agent_trajectories) (gated) spans genuinely different jobs rather than variants of one: web research, customer service, terminal operations, coding, MCP tool use and maths reasoning, across 5 models, **8,653 episodes**. Crucially every task is attempted up to **four times by the same model**, so pass-to-pass variance measures run-to-run noise on *identical work* — the first clean read on process variance in this repo.
+
+`mcpbench` is excluded. Its reward is not binary (261 distinct values, mean 3.17) and is on a scale the other five do not share; thresholding it into a loss would pool two different quantities. That leaves 5 roles, 106 deployments, 7,598 episodes.
+
+### There is no universal K
+
+![per role K](out/fig6_per_role_k.png)
+
+| role | K | 5–95% | deployments | loss rate |
+|---|---:|---|---:|---:|
+| search | 2.1 | [1.6, 4.0] | 15 | 0.78 |
+| tau2bench (customer service) | 4.9 | [2.9, 14.7] | 15 | 0.61 |
+| swebench (coding) | 7.0 | [4.6, 12.1] | 25 | 0.78 |
+| terminalbench (ops) | 15.0 | [10.3, 26.8] | 46 | 0.81 |
+| mathhay | 107.4 | [53.6, 843.5] | 5 | 0.54 |
+
+K ranges **7×** across identifiable roles. A research agent earns experience rating after ~2 episodes; an ops agent needs ~15. `mathhay` has only one domain, so 5 deployments and an interval spanning an order of magnitude — unidentified, and shown grey rather than quietly dropped.
+
+**An unplanned replication.** `swebench` here gives K = 7.0 [4.6, 12.1]. The SWE-smith study gave K = 7.6 [4.8, 12.2] — a different corpus, different task set, and different models (DeepSeek / Qwen / Gemini here versus Claude 3.7 Sonnet there). Two independent measurements of the coding-agent credibility constant landing on the same number is the strongest evidence in this repo that K is a property of the role rather than of a dataset.
+
+### Most risk variation is task mix, not identity
+
+![decomposition](out/fig7_risk_decomposition.png)
+
+With pass-to-pass noise (0.0794) removed first, the systematic variance splits:
+
+| level | variance | share of systematic |
+|---|---:|---:|
+| task mix within a deployment | 0.0765 | **65.7%** |
+| deployment within a role | 0.0293 | 25.2% |
+| role | 0.0106 | 9.1% |
+
+**This corrects the earlier reading.** The AgentRewardBench study put role at ~54%, but it compared role against deployment only and had no task level to attribute to. Given a corpus that can separate all four levels, most of what looks like "this deployment is risky" is really "this deployment runs harder tasks."
+
+Three consequences, and only the first is comfortable:
+
+- Credibility still works. Collapsing passes and pricing task-level means gives K = 2.96 [2.06, 4.98] — deployments genuinely differ, and the estimator still earns its keep.
+- **The exposure base must be task-mix aware.** Pricing a deployment on identity alone prices its task mix by accident. This is independent support for the trace-economic paper's insistence that the insurable unit is a role with *bounded task scope*, not an agent.
+- Role explains 9% of systematic variance here, not 54%. It is a real effect and it sets the prior you start from, but it is the smallest of the three terms. A role registry is necessary and nowhere near sufficient.
+
+Run-to-run noise is also large — 0.0794, comparable to task mix at 0.0765. The same agent, given the same task twice, often disagrees with itself. That is a floor on how well *any* per-deployment estimate can do.
+
 ## Trusting the number
 
 The estimator is validated against a closed-form answer before use. For a Beta(a,b)-Bernoulli class the credibility constant is exactly `a + b`, so there is a known target: `pytest` checks recovery across three concentration regimes and four seeds (16 tests).
@@ -139,6 +183,8 @@ Data: [`SWE-bench/SWE-smith-trajectories`](https://huggingface.co/datasets/SWE-b
 | `src/credibility/extract.py` | trajectories → per-episode behavioural features |
 | `src/credibility/buhlmann.py` | Bühlmann-Straub variance components, Z, bootstrap CI |
 | `src/credibility/experiment.py` | E1 class definitions, E3 holdout sweep, E4 cold start, E5 signals |
+| `src/credibility/cx.py` | six-role corpus: per-role K, four-level decomposition |
+| `src/credibility/cx_probe.py` | schema probe for the gated corpus, reads footers only |
 | `src/credibility/webagents.py` | AgentRewardBench expert annotations -> web-agent episodes |
 | `src/credibility/role_separation.py` | R1 role decomposition, R2 cross-role cold start |
 | `src/credibility/power.py` | how small a K this design could detect |

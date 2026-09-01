@@ -1,0 +1,11 @@
+{
+  "var_pass_noise": 0.07937010247136829,
+  "var_task_mix": 0.07649288827949403,
+  "var_deployment": 0.0292953675758975,
+  "var_role": 0.010623571179674322,
+  "share_task_mix": 0.6570886328968332,
+  "share_deployment": 0.2516528459524398,
+  "share_role": 0.09125852115072693,
+  "n_tasks_with_repeats": 1967,
+  "n_episodes": 7598
+}
