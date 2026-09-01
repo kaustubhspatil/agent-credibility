@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "freeboard"
-version = "0.1.0"
+version = "0.2.0"
 description = "Measure how much safety envelope an AI agent deployment has left, without ever seeing its data."
 readme = "README-pypi.md"
 requires-python = ">=3.10"

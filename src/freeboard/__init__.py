@@ -23,7 +23,7 @@
     payload = to_wire(rec.records[-1])   # validated; refuses to carry content
 """
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 from .chain import (
     GENESIS,
@@ -45,6 +45,14 @@ from .envelope import (
     manifest_hash,
 )
 from .episode import Episode, EpisodeRecord, Recorder
+from .estimate import (
+    Components,
+    bootstrap_k,
+    components,
+    credibility_estimate,
+    losses_from_records,
+)
+from .sinks import JsonlSink, read_checkpoint, read_jsonl, write_checkpoint
 from .state import RecorderState, StateError
 from .wire import (
     SCHEMA_VERSION,
@@ -57,6 +65,15 @@ from .wire import (
 )
 
 __all__ = [
+    "write_checkpoint",
+    "read_jsonl",
+    "read_checkpoint",
+    "losses_from_records",
+    "credibility_estimate",
+    "components",
+    "bootstrap_k",
+    "JsonlSink",
+    "Components",
     "ChainState",
     "Checkpoint",
     "GENESIS",
