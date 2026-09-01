@@ -18,6 +18,12 @@ echo "==> user and directories"
 id -u freeboard >/dev/null 2>&1 || useradd --system --home "$APP_DIR" --shell /usr/sbin/nologin freeboard
 mkdir -p "$APP_DIR" "$DATA_DIR"
 
+# git refuses to operate on a tree it does not own, and after the first install
+# this one belongs to the service user while the installer runs as root. Without
+# this the UPDATE path fails ("dubious ownership") while a fresh install
+# succeeds -- so the script looks idempotent and is not.
+git config --global --add safe.directory "$APP_DIR" 2>/dev/null || true
+
 echo "==> source at ref ${REF}"
 if [ -d "$APP_DIR/.git" ]; then
   git -C "$APP_DIR" fetch --depth 1 origin "$REF"
