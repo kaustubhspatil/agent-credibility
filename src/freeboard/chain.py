@@ -129,15 +129,21 @@ def verify(
     *,
     expected_head: str | None = None,
     start_hash: str = GENESIS,
+    start_seq: int = 0,
 ) -> VerificationResult:
     """Recompute the chain and report the first place it disagrees.
 
     `expected_head` should come from a checkpoint the verifier already held.
     Without it this only proves the sequence is self-consistent -- which the
     vendor could have produced from scratch.
+
+    `start_seq` with `start_hash` lets a verifier check a *continuation* of a
+    chain it already holds rather than only one from genesis. A receiver taking
+    successive batches needs this; without it only a deployment's very first
+    batch would ever verify.
     """
     prev = start_hash
-    expected_seq = 0
+    expected_seq = start_seq
     count = 0
 
     for payload in payloads:
