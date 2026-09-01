@@ -1,0 +1,42 @@
+[Unit]
+Description=Freeboard bureau (accountless ingest, pooled priors, chain anchoring)
+Documentation=https://github.com/kaustubhspatil/agent-credibility
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=freeboard
+Group=freeboard
+WorkingDirectory=/opt/freeboard
+Environment=PYTHONPATH=/opt/freeboard/src
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/usr/bin/python3 -m bureau.app --db /var/lib/freeboard/bureau.db --host 127.0.0.1 --port 8080
+
+# A Spot host is preempted without warning, so restarting must be the default
+# and must not give up. The SQLite WAL and the clients' local spools together
+# mean an unplanned stop costs availability, never data.
+Restart=always
+RestartSec=3
+
+# The bureau parses untrusted JSON from anyone on the internet. It should be
+# able to do almost nothing else.
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+ReadWritePaths=/var/lib/freeboard
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @resources
+
+[Install]
+WantedBy=multi-user.target

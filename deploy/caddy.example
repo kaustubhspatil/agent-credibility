@@ -1,0 +1,26 @@
+# TLS in front of the bureau. Caddy obtains and renews certificates itself,
+# which is one less thing to be broken after an unattended restart.
+#
+#   apt-get install -y caddy
+#   cp caddy.example /etc/caddy/Caddyfile   # edit the hostname first
+#   systemctl reload caddy
+
+bureau.example.org {
+	reverse_proxy 127.0.0.1:8080
+
+	# The ingest endpoint is accountless, so it needs a ceiling somewhere.
+	# The application caps body size and batch length; this caps arrival rate.
+	rate_limit {
+		zone ingest {
+			key    {remote_host}
+			events 120
+			window 1m
+		}
+	}
+
+	encode gzip
+	log {
+		output file /var/log/caddy/bureau.log
+		format json
+	}
+}
