@@ -274,6 +274,60 @@ Tools that declare nothing fall back to keyword priors, and anything inferred th
 
 `to_otel_attributes()` emits `gen_ai.*` and `agent.credibility.*` span attributes for an integrator's existing tracer, validated on the way out. The package takes no OTel dependency.
 
+## Testing the envelope against human-audited labels
+
+The derived task envelope was the weakest-evidenced part of the SDK: it reads a tool
+manifest and returns a structural risk shape, and the only argument for it was that it
+seemed reasonable. [ATBench](https://huggingface.co/datasets/AI45Research/ATBench)
+([arXiv 2604.02022](https://arxiv.org/pdf/2604.02022), Apache-2.0) is 1,000 agent
+trajectories, each carrying the tool manifest the agent was given and a safety label
+audited by five reviewers. That makes the envelope testable — and every tool there is
+undeclared, so the keyword fallback did all 3,156 classifications. This is the worst case.
+
+**Frequency: no signal.** The envelope does not predict whether a trajectory goes wrong.
+
+| structural score | AUC | 95% CI | |
+|---|---:|---|---|
+| rule of two violated | 0.534 | [0.508, 0.560] | barely above chance |
+| number of capabilities | 0.522 | [0.490, 0.554] | no signal |
+| irreversible tools | 0.487 | [0.454, 0.519] | no signal |
+| number of tools | **0.414** | [0.384, 0.450] | **significantly inverse** |
+
+Class codes stratify backwards: `C000-V0` (no capabilities at all) has the *highest*
+unsafe rate at 0.537, `C101-I0` the lowest at 0.380. The rule of two gives 1.12× lift —
+real, but far too weak to price on.
+
+**Why, and it is not an excuse.** 51% of ATBench's unsafe rows arrive by injection — from
+outside the manifest — and 250 *safe* rows carry a risk source too: the same threat was
+present and the agent handled it. ATBench holds the threat roughly constant and varies the
+outcome. It asks whether the agent coped, which is competence. The envelope measures
+exposure. A null was the correct expectation, and the null still bounds what structure may
+claim.
+
+**Severity: real signal.** Among unsafe trajectories, structure predicts *which kind of
+harm* results:
+
+| feature | p | η² |
+|---|---|---|
+| number of tools | 1.1e-10 | 0.116 |
+| number of capabilities | 7.5e-05 | 0.052 |
+| irreversible tools | 1.2e-04 | 0.050 |
+| rule of two | 2.4e-02 | 0.021 (not significant) |
+
+And the ordering is sensible — `security_and_system_integrity_harm` averages 1.67
+irreversible tools, `physical_and_health_harm` 0.55. Effect sizes are modest; the direction
+is not in doubt.
+
+**What this settles.** `class_code` is an **exposure and severity** dimension, not a
+failure-rate predictor, and it must never be presented as one. That is exactly the split
+the insurance blueprint describes — severity from structure, frequency from observed
+experience — and it is now measured rather than assumed. Two deployments with the same
+powers share an exposure profile and should price on the same *severity* basis; what
+separates their premiums is experience, which is what credibility supplies.
+
+It also means a public trust score cannot be built from structure alone. Structure says how
+bad it would be. Only telemetry says how often.
+
 ## Trusting the number
 
 The estimator is validated against a closed-form answer before use. For a Beta(a,b)-Bernoulli class the credibility constant is exactly `a + b`, so there is a known target: `pytest` checks recovery across three concentration regimes and four seeds (16 tests).
