@@ -194,8 +194,9 @@ def divergence_priors(store: Store, role: str) -> list[dict[str, Any]]:
             )
             n_pending = len(set(pending)) - entry["n_deployments"]
             if n_pending > 0:
-                entry["reason"] += (
-                    f"; {n_pending} more attesting but not yet admitted"
+                entry["reason"] = (
+                    f"{n_pending} deployment(s) attesting, none admitted yet; "
+                    f"a baseline is published once at least 2 are admitted"
                 )
         out.append(entry)
     return out
