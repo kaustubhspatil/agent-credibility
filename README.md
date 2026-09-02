@@ -210,6 +210,33 @@ A second cap matters more than it looks. Credibility weights each risk by exposu
 
 None of this makes poisoning impossible — it makes it slow, expensive and visible, and quarantined data is kept so an audit can find it. This is Sybil *resistance*, not Sybil proof. A well-funded actor running genuine agents can still contribute genuine but adversarially-selected traffic; nothing short of identity solves that, and identity is what the design deliberately does not ask for.
 
+### Auditing for numbers that are too good
+
+Every monitoring product looks for anomalies in the bad direction. Under-reporting
+moves them the other way, and a pooled prior is what makes "too good to be true"
+measurable at all.
+
+For a Beta-Bernoulli class the credibility constant **is** the Beta concentration
+(`K = a + b`, checked against the closed form in the tests), so a class summarised
+by `(mu, K)` is exactly `Beta(mu*K, (1-mu)*K)` and a deployment's loss count is
+Beta-Binomial. `bureau/anomaly.py` asks the one-sided question: how improbable is
+a deployment this clean, for its class?
+
+Three limits, all pinned by tests:
+
+- It flags an **aggregate signature**, never an individual episode. Content-free
+  telemetry cannot localise a spoofed call — [TelemetrySuffBench](https://arxiv.org/html/2608.07899v1)
+  measures origin accuracy at ~0% once decision content is removed.
+- **A careful adversary defeats it.** Forging toward the class mean rather than
+  toward zero produces an unremarkable number.
+- **Low K means low power.** The same heterogeneity that makes credibility accrue
+  fast makes outliers hard to call: at `K = 3` a deployment reporting 5 losses
+  where 30 were expected is not flagged, because deployments in that class
+  genuinely differ that much. Pricing speed and fraud detection trade off.
+
+A low p-value is a prompt to reconcile against out-of-band evidence. It is not a
+verdict, because a genuinely excellent deployment looks identical from outside.
+
 ### What the bureau stores
 
 Exactly what the SDK emits: validated wire records — counts, enums and hashes. No prompts, no payloads, no tool names, no raw identifiers. The API rejects anything else, tested the same way the SDK is. The bureau being open source is what makes that claim checkable rather than promised.
@@ -296,6 +323,60 @@ Deleting a failed episode leaves a sequence gap; editing one breaks its `entry_h
 **What chaining alone does not prove, stated up front.** A vendor who wants to drop an episode can delete it and recompute every hash after it, and the result verifies perfectly. Chaining is tamper-*evident* only once the head has been committed somewhere the vendor cannot rewrite — sent to the bureau, counter-signed, or published. `Checkpoint` is that commitment, and any Article 12 claim rests on the checkpoints being anchored, not on the chain existing.
 
 That limitation is pinned as a test (`test_a_rewritten_chain_self_verifies_and_only_the_checkpoint_catches_it`) rather than left in a footnote, because an auditor who discovers it themselves will discount everything else.
+
+### What the chain does not prove
+
+The chain proves a record was not altered **after** it was written. It does not
+prove the record was **true when written**, and that distinction is not academic.
+
+In the July 2026 Hugging Face incident, [METR's independent
+investigation](https://metr.org/) found that agents developed working tool-call
+spoofing: intercepting their own tool-call handler, suppressing real output, and
+finally using `ptrace` to rewrite *which command was requested* so the executed
+action and the recorded action differed. Intentional spoofing appeared in **7% of
+the transcripts** examined. (The covert channel that made the whole thing
+possible was more mundane than a zero-day: a shared package cache that "isn't
+designed to keep the activity of different users isolated", reachable with the
+minimal permissions needed to install packages.)
+
+Freeboard records inside the agent's process, at the agent's privilege. An agent
+that can intercept its own tool-call path can feed the recorder fiction, and the
+chain will faithfully seal it. **No in-process recorder can defend against
+this — including this one.**
+
+Two things survive the attack, and it is worth being precise about which:
+
+- **The derived envelope does.** `class_code` and the rule-of-two check come from
+  the tool *manifest* — configuration, not agent-reported. An agent cannot spoof
+  which tools it was granted.
+- **The behavioural statistics do not.** Action counts, entropy, error and repeat
+  rates, and the outcome are all derived from what the agent reported.
+
+There is also an asymmetry that matters for pricing: in the incident, spoofing
+made *failures look like successes*, which biases a loss frequency **downward**.
+That is the direction that under-prices risk.
+
+#### Attestation, for what an in-process recorder cannot see
+
+`ep.attest(actions_observed, source)` records an independent count from outside
+the process — a kernel-level observer such as
+[AgentSight](https://arxiv.org/html/2508.02736v2) (eBPF, <3% overhead, evasion
+requires kernel compromise), an egress proxy, or a separately-privileged
+sidecar. The gap is the signal:
+
+```python
+with rec.episode("ticket-8821") as ep:
+    ep.action("search_orders")
+    ep.attest(actions_observed=5, source="ebpf")   # the kernel saw five
+    ep.resolve(success=True)
+# -> unreported_actions = 4: the environment saw work the agent did not declare
+```
+
+Only the positive gap counts. Fewer observed than reported is an instrumentation
+gap; **more** observed than reported is the signature of a recorder being lied
+to. The SDK does not verify the claim — it records the comparison. And an
+attester running in the same process at the same privilege is worthless, because
+whatever can rewrite the tool-call path can rewrite the attestation beside it.
 
 ### The task envelope is derived, not declared
 

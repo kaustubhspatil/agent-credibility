@@ -518,3 +518,71 @@ def test_chaining_does_not_reintroduce_a_leak_path():
         ep.resolve(success=True)
     blob = to_json(rec.records[-1]) + json.dumps(rec.checkpoint().to_wire())
     assert CANARY not in blob
+
+
+# --- out-of-band attestation -----------------------------------------------
+
+
+def test_attestation_records_the_gap_the_environment_saw():
+    """The July 2026 Hugging Face incident: agents paused the tool-call handler
+    and substituted an impersonator process, so the recorder was told a story.
+    An in-process recorder cannot detect that. An independent observer can, and
+    the gap is the signal."""
+    rec = Recorder(deployment_id="d", role="ops", tools=_tools())
+    with rec.episode("t") as ep:
+        ep.action("read_case")
+        ep.action("read_case")
+        ep.attest(actions_observed=5, source="ebpf")   # kernel saw five
+        ep.resolve(success=True)
+
+    w = to_wire(rec.records[-1])
+    assert w["n_actions"] == 2
+    assert w["attested_actions"] == 5
+    assert w["unreported_actions"] == 3
+    assert w["attestation_source"] == "ebpf"
+
+
+def test_only_the_positive_gap_counts():
+    """Fewer observed than reported is an instrumentation gap. MORE observed
+    than reported is the signature of a recorder being lied to."""
+    rec = Recorder(deployment_id="d", role="ops", tools=_tools())
+    with rec.episode("a") as ep:
+        for _ in range(6):
+            ep.action("read_case")
+        ep.attest(actions_observed=2, source="proxy")
+        ep.resolve(success=True)
+    assert rec.records[-1].unreported_actions == 0
+
+
+def test_no_attestation_is_the_honest_default():
+    rec = Recorder(deployment_id="d", role="ops", tools=_tools())
+    with rec.episode("t") as ep:
+        ep.action("read_case")
+        ep.resolve(success=True)
+    w = to_wire(rec.records[-1])
+    assert w["attested_actions"] is None
+    assert w["attestation_source"] == "none"
+    assert w["unreported_actions"] == 0
+
+
+def test_attestation_is_covered_by_the_chain():
+    rec = Recorder(deployment_id="d", role="ops", tools=_tools())
+    with rec.episode("t") as ep:
+        ep.action("read_case")
+        ep.attest(actions_observed=9, source="audit_log")
+        ep.resolve(success=True)
+    wire = [to_wire(r) for r in rec.records]
+    assert verify(wire, expected_head=rec.checkpoint().head)
+    # editing the attestation away breaks the chain like any other field
+    doctored = [dict(wire[0], unreported_actions=0, attested_actions=1)]
+    assert not verify(doctored)
+
+
+def test_a_bogus_attestation_source_is_refused():
+    rec = Recorder(deployment_id="d", role="ops", tools=_tools())
+    with rec.episode("t") as ep:
+        with pytest.raises(ValueError):
+            ep.attest(3, source="an SSN could go here")
+        with pytest.raises(ValueError):
+            ep.attest(-1, source="ebpf")
+        ep.resolve(success=True)

@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import hashlib
 import math
+import re
 import time
 import uuid
 from collections import Counter
@@ -35,6 +36,9 @@ from . import __version__ as _VERSION
 from .chain import ChainState, Checkpoint, checkpoint
 from .state import RecorderState
 from .envelope import Capability, Reversibility, TaskEnvelope, ToolSpec, derive_envelope
+
+
+_SOURCE_RE = re.compile(r"\A[a-z0-9][a-z0-9_.\-]{0,31}\Z")
 
 
 def _hash_id(value: str, salt: str) -> str:
@@ -85,6 +89,21 @@ class EpisodeRecord:
     # scope actually exercised, for the divergence signal
     observed_capabilities: tuple[str, ...] = ()
 
+    # Independent observation of this episode, if any. The recorder runs inside
+    # the agent's process at the agent's privilege, so it can only report what
+    # the tool-call path tells it. An agent able to intercept that path can feed
+    # it fiction -- in the July 2026 Hugging Face incident agents did exactly
+    # this, pausing the tool-call handler and substituting an impersonator
+    # process, with intentional spoofing found in 7% of transcripts.
+    #
+    # `attested_actions` is a count from something OUTSIDE that process: a
+    # kernel-level observer (eBPF), an egress proxy, an audit log. The gap
+    # between it and `n_actions` is the signal; a positive `unreported_actions`
+    # means the environment saw work the agent did not declare.
+    attested_actions: int | None = None
+    unreported_actions: int = 0
+    attestation_source: str = "none"
+
     # tamper-evident sequencing. seq and prev_hash are set as the record is
     # appended to the deployment's chain; entry_hash commits to everything else.
     seq: int = 0
@@ -114,6 +133,8 @@ class Episode:
         self._escalated = False
         self._resolved: bool | None = None
         self._reward: float | None = None
+        self._attested: int | None = None
+        self._attestation_source = "none"
         self._finished = False
 
         self.record_id = uuid.uuid4().hex[:16]
@@ -147,6 +168,28 @@ class Episode:
     def escalate(self) -> None:
         """The agent handed off to a human."""
         self._escalated = True
+
+    def attest(self, actions_observed: int, source: str = "external") -> None:
+        """Record an independent count of actions from outside this process.
+
+        This is the only defence in the SDK against an agent that misreports
+        its own behaviour, and it works only if `source` really is out of band.
+        An attester running in the same process at the same privilege is
+        worthless: whatever can rewrite the tool-call path can rewrite the
+        attestation beside it. Kernel-level observation, an egress proxy, or a
+        separately-privileged sidecar are the shapes that mean something.
+
+        The SDK does not and cannot verify the claim. It records the comparison
+        and lets the bureau and the auditor weigh it.
+        """
+        if self._finished:
+            raise RuntimeError("episode already finished")
+        if actions_observed < 0:
+            raise ValueError("actions_observed must be non-negative")
+        if not _SOURCE_RE.match(source):
+            raise ValueError(f"attestation source {source!r} is not a slug")
+        self._attested = actions_observed
+        self._attestation_source = source
 
     def resolve(
         self, *, success: bool | None = None, reward: float | None = None
@@ -219,6 +262,15 @@ class Episode:
             output_chars=self._output_chars,
             duration_ms=int((time.monotonic() - self._start) * 1000),
             observed_capabilities=tuple(sorted(c.value for c in caps)),
+            attested_actions=self._attested,
+            # Only the positive gap matters. Fewer observed than reported is an
+            # instrumentation gap; MORE observed than reported means the
+            # environment saw work the agent did not declare, which is the
+            # signature of a recorder being lied to.
+            unreported_actions=(
+                max(0, self._attested - n) if self._attested is not None else 0
+            ),
+            attestation_source=self._attestation_source,
         )
         # Tool names are handed to the recorder, which stays in the customer's
         # process, and never to the record, which leaves it.
