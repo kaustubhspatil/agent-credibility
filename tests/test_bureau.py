@@ -415,3 +415,29 @@ def test_a_batch_that_cannot_be_stored_is_not_reported_as_accepted(store, tmp_pa
     broken[1]["role"] = None
     with pytest.raises(ValueError, match="stored 2 of 3"):
         store.insert_episodes("acme", broken)
+
+
+def test_waiting_on_admission_does_not_look_like_missing_instrumentation(
+    store, tmp_path
+):
+    """A caller told "nobody is attesting" when the truth is "nobody is admitted
+    yet" goes hunting for a bug in their own eBPF setup."""
+    from bureau.app import divergence_priors
+
+    for i in range(2):
+        rec = Recorder(
+            deployment_id=f"att{i}",
+            role="customer_support",
+            tools=TOOLS,
+            state_path=str(tmp_path / f"att{i}.json"),
+        )
+        for j in range(10):
+            with rec.episode(f"t{j}") as ep:
+                ep.action("read_case")
+                ep.attest(actions_observed=2, source="ebpf")
+                ep.resolve(success=True)
+        ingest_episodes(store, [to_wire(r) for r in rec.records])
+
+    (entry,) = divergence_priors(store, "customer_support")
+    assert entry["available"] is False
+    assert "2 more attesting but not yet admitted" in entry["reason"]
