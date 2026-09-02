@@ -282,6 +282,10 @@ class Handler(BaseHTTPRequestHandler):
                 raise BureauError(404, "no such route")
         except BureauError as exc:
             self._send(exc.status, {"error": exc.message})
+        except Exception as exc:  # noqa: BLE001
+            # Without this the connection is dropped and the caller sees a bare
+            # 502 from whatever proxy is in front, which says nothing at all.
+            self._send(500, {"error": f"internal error: {type(exc).__name__}"})
 
 
 def serve(db: str = "bureau.db", host: str = "127.0.0.1", port: int = 8080) -> None:

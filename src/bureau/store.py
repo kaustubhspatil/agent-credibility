@@ -94,6 +94,15 @@ EPISODE_FIELDS = (
 )
 
 
+# Fields a client may legitimately omit, with the value stored in their place.
+# Kept in step with freeboard.wire._OPTIONAL_SINCE_1_0 by a test; the two cannot
+# be imported into one another without tying the server build to an SDK version.
+FIELD_DEFAULTS = {
+    "unreported_actions": 0,
+    "attestation_source": "none",
+}
+
+
 @dataclass(frozen=True)
 class IngestResult:
     accepted: int
@@ -185,19 +194,42 @@ class Store:
     # -- episodes ----------------------------------------------------------
 
     def insert_episodes(self, deployment_id: str, records: Iterable[dict]) -> int:
+        """Store a validated batch, and refuse to report success it did not have.
+
+        Two things are load-bearing here. Fields a client is allowed to omit get
+        their declared default rather than NULL: a record from a client older
+        than the attestation fields is a real record, not a broken one. And the
+        row count is checked, because INSERT OR IGNORE is there to make a replay
+        idempotent and will just as happily swallow a constraint violation --
+        which is how an accepted batch can be silently discarded while the API
+        reports it accepted.
+        """
         now = time.time()
         rows = [
-            tuple([deployment_id] + [r.get(f) for f in EPISODE_FIELDS] + [now])
+            tuple(
+                [deployment_id]
+                + [
+                    r[f] if f in r else FIELD_DEFAULTS.get(f)
+                    for f in EPISODE_FIELDS
+                ]
+                + [now]
+            )
             for r in records
         ]
         if not rows:
             return 0
         placeholders = ",".join("?" * (len(EPISODE_FIELDS) + 2))
+        before = self._conn.total_changes
         self._conn.executemany(
             f"INSERT OR IGNORE INTO episodes (deployment_id,"
             f" {','.join(EPISODE_FIELDS)}, received_at) VALUES ({placeholders})",
             rows,
         )
+        written = self._conn.total_changes - before
+        if written != len(rows):
+            raise ValueError(
+                f"stored {written} of {len(rows)} episodes for {deployment_id}"
+            )
         return len(rows)
 
     def insert_checkpoint(self, payload: dict[str, Any]) -> None:

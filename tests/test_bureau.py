@@ -18,6 +18,7 @@ from bureau.app import (
     ingest_episodes,
 )
 from bureau.store import Store
+from freeboard.wire import _OPTIONAL_SINCE_1_0
 from freeboard import (
     Capability,
     Recorder,
@@ -338,3 +339,79 @@ def test_a_handler_error_returns_a_status_not_a_dropped_connection(tmp_path):
         assert "except BureauError" in src
         assert "except Exception" in src
         assert "self._send(500" in src
+
+
+# --- an old client must keep working -------------------------------------
+
+
+def as_an_old_client_would_have_sent(wire):
+    """Rebuild a batch the way freeboard 0.2.1 would have produced it.
+
+    The attestation fields did not exist, so an old client did not merely omit
+    them from the payload -- it computed its chain over a body that never had
+    them. Stripping fields from an already-chained record instead produces a
+    record whose entry_hash cannot verify, which tests the hash check rather
+    than the compatibility rule.
+    """
+    from freeboard.chain import GENESIS, entry_hash
+
+    dropped = set(_OPTIONAL_SINCE_1_0)
+    head, out = GENESIS, []
+    for i, rec in enumerate(wire):
+        body = {k: v for k, v in rec.items() if k not in dropped and k != "entry_hash"}
+        body["schema_version"] = "1.0"
+        body["seq"] = i
+        body["prev_hash"] = head
+        head = entry_hash(body)
+        out.append({**body, "entry_hash": head})
+    return out
+
+
+def test_a_client_from_before_attestation_is_still_accepted(store, tmp_path):
+    """Wire formats that only work in lockstep are wire formats that strand
+    every deployment that does not upgrade the same afternoon."""
+    _, wire = fleet(tmp_path, "legacy", 0.2, 12)
+    old = as_an_old_client_would_have_sent(wire)
+    for field in _OPTIONAL_SINCE_1_0:
+        assert field not in old[0]
+
+    out = ingest_episodes(store, old)
+    assert out["accepted"] == 12
+
+    row = store._conn.execute(
+        "SELECT attestation_source, unreported_actions FROM episodes LIMIT 1"
+    ).fetchone()
+    assert row["attestation_source"] == "none"
+    assert row["unreported_actions"] == 0
+    # and it contributes nothing to a divergence baseline: no observer watched it
+    assert store.divergence_observations("customer_support", "none") == ([], [], [])
+
+
+def test_an_unknown_field_is_still_refused(store, tmp_path):
+    """Tolerating MISSING known fields must not become tolerating unknown ones,
+    which is the hole that lets content in."""
+    _, wire = fleet(tmp_path, "acme", 0.2, 3)
+    smuggled = [dict(w) for w in wire]
+    smuggled[0]["attested_note"] = "free text"
+    with pytest.raises(BureauError, match="unknown fields"):
+        ingest_episodes(store, smuggled)
+
+
+def test_the_two_default_tables_agree():
+    """The bureau cannot import the SDK's table without pinning itself to an SDK
+    version, so the duplication is deliberate and this is what keeps it honest."""
+    from bureau.store import EPISODE_FIELDS, FIELD_DEFAULTS
+
+    omittable = {k: v for k, v in _OPTIONAL_SINCE_1_0.items() if k in EPISODE_FIELDS}
+    assert FIELD_DEFAULTS == omittable
+
+
+def test_a_batch_that_cannot_be_stored_is_not_reported_as_accepted(store, tmp_path):
+    """INSERT OR IGNORE makes a replay idempotent; it will also quietly swallow a
+    constraint violation, and a bureau that answers 'accepted' over discarded
+    episodes is worse than one that errors."""
+    _, wire = fleet(tmp_path, "acme", 0.2, 3)
+    broken = [dict(w) for w in wire]
+    broken[1]["role"] = None
+    with pytest.raises(ValueError, match="stored 2 of 3"):
+        store.insert_episodes("acme", broken)
