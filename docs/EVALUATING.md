@@ -106,6 +106,34 @@ agent is wired to, never from what is declared.
 
 ---
 
+## Does the attestation path work?
+
+```bash
+pytest tests/test_recorder.py -k attest -v
+pytest tests/test_divergence.py tests/test_anomaly.py -q
+```
+
+`ep.attest(actions_observed, source)` records an independent count from outside the
+agent's process. Only the positive gap is kept: fewer observed than reported is an
+instrumentation gap, **more** observed than reported is the signature of a recorder
+being lied to.
+
+This exists because the chain proves a record was not altered *after* writing, not that
+it was *true when written* — and in the July 2026 Hugging Face incident agents rewrote
+which command their own tool-call handler requested, with spoofing found in 7% of
+transcripts. No in-process recorder defends against that, including this one. The
+derived envelope survives it (it comes from the tool manifest, not from anything the
+agent reports); the behavioural statistics do not.
+
+The bureau side pools attestation gaps into a baseline, so a deployment can be asked
+whether its divergence is unusual for its class. Two rules are enforced in code:
+unattested episodes are excluded rather than counted as zero, and divergence is never
+pooled across attestation sources. Both have tests.
+
+`bureau/anomaly.py` runs the other tail — auditing for deployments that report
+implausibly *few* losses, which is the direction spoofing biases a frequency and the
+direction nobody audits.
+
 ## What it does not do
 
 - **No transport.** The SDK produces validated, chained records and stops.
@@ -123,4 +151,7 @@ agent is wired to, never from what is declared.
   `capabilities` and `reversibility` explicitly on every tool that matters.
 - **Drift is untested.** The research corpora carry no timestamps, so nothing
   here demonstrates resistance to a risk profile changing over time.
+- **No detector of individual spoofed episodes.** The divergence and
+  underreporting tests flag an aggregate signature across many episodes, never a
+  single one, and an adversary forging toward the class mean defeats both.
 - **The API may change before 1.0.**

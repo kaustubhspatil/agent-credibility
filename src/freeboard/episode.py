@@ -38,6 +38,10 @@ from .state import RecorderState
 from .envelope import Capability, Reversibility, TaskEnvelope, ToolSpec, derive_envelope
 
 
+# The wire format version. Lives here because `wire` already imports from
+# this module; defining it there and importing back would be circular.
+SCHEMA_VERSION = "1.1"
+
 _SOURCE_RE = re.compile(r"\A[a-z0-9][a-z0-9_.\-]{0,31}\Z")
 
 
@@ -111,7 +115,9 @@ class EpisodeRecord:
     entry_hash: str = ""
 
     # provenance
-    schema_version: str = "1.0"
+    # Single source of truth: wire.SCHEMA_VERSION. A literal here would
+    # drift from the format it claims to describe.
+    schema_version: str = SCHEMA_VERSION
     recorder_version: str = _VERSION
 
 

@@ -586,3 +586,34 @@ def test_a_bogus_attestation_source_is_refused():
         with pytest.raises(ValueError):
             ep.attest(-1, source="ebpf")
         ep.resolve(success=True)
+
+
+def test_a_record_from_an_older_client_is_still_accepted():
+    """Bureau and clients do not upgrade in lockstep. A record predating the
+    attestation fields must still validate, or every bureau upgrade strands
+    every client that has not upgraded yet."""
+    rec = Recorder(deployment_id="d", role="ops", tools=_tools())
+    with rec.episode("t") as ep:
+        ep.action("read_case")
+        ep.resolve(success=True)
+    old = {
+        k: v for k, v in to_wire(rec.records[-1]).items()
+        if k not in {"attested_actions", "unreported_actions", "attestation_source"}
+    }
+    validate(old)          # must not raise
+
+
+def test_unknown_fields_are_still_refused():
+    """The tolerance is only for MISSING known fields. Accepting unknown ones
+    would give up the allow-list, which is the entire privacy guarantee."""
+    rec = Recorder(deployment_id="d", role="ops", tools=_tools())
+    with rec.episode("t") as ep:
+        ep.resolve(success=True)
+    with pytest.raises(WireViolation, match="unknown fields"):
+        validate(dict(to_wire(rec.records[-1]), prompt="SSN-078-05-1120"))
+
+
+def test_schema_version_moved_with_the_fields():
+    from freeboard.wire import SCHEMA_VERSION
+
+    assert SCHEMA_VERSION == "1.1"
