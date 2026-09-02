@@ -37,6 +37,7 @@ from freeboard import GENESIS, WireViolation, validate, verify
 from freeboard.estimate import components
 
 from .admission import capped_weights, evaluate
+from .divergence import class_divergence
 from .store import Store
 
 log = logging.getLogger("bureau")
@@ -161,10 +162,29 @@ def class_prior(store: Store, role: str, own_n: float = 0.0) -> dict[str, Any]:
         "n_episodes": int(sum(exposure.values())),
         "influence_capped": any(caps[r] < exposure[r] for r in order),
     }
+    div = divergence_priors(store, role)
+    if div:
+        out["divergence"] = div
     if own_n and comp.k != float("inf"):
         z = comp.z(own_n)
         out["your_z"] = round(z, 4)
         out["episodes_to_z50"] = round(comp.episodes_for_z(0.5), 1)
+    return out
+
+
+def divergence_priors(store: Store, role: str) -> list[dict[str, Any]]:
+    """What divergence looks like for this role, per attestation source.
+
+    Never pooled across sources: a kernel observer counts execve, an egress
+    proxy counts requests, an audit log counts whatever the platform chose to
+    log. Averaging them produces a number about nothing.
+    """
+    out = []
+    for source in sorted(store.attestation_sources(role)):
+        diverged, magnitude, ids = store.divergence_observations(role, source)
+        out.append(
+            class_divergence(diverged, magnitude, ids, role, source).as_dict()
+        )
     return out
 
 
@@ -245,6 +265,12 @@ class Handler(BaseHTTPRequestHandler):
                     self._send(200, {"roles": self.store.role_summary()})
                 else:
                     self._send(200, class_prior(self.store, role))
+            elif parsed.path == "/v1/divergence":
+                role = (parse_qs(parsed.query).get("role") or [None])[0]
+                if not role:
+                    raise BureauError(400, "role is required")
+                self._send(200, {"role": role,
+                                 "sources": divergence_priors(self.store, role)})
             elif parsed.path == "/v1/health":
                 self._send(200, {"ok": True, **self.store.stats()})
             else:

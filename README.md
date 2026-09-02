@@ -237,6 +237,58 @@ Three limits, all pinned by tests:
 A low p-value is a prompt to reconcile against out-of-band evidence. It is not a
 verdict, because a genuinely excellent deployment looks identical from outside.
 
+### How much divergence is normal?
+
+An attestation tool tells a customer three actions went unreported this episode.
+**Nothing on the market can tell them whether that is an attack or a Tuesday.**
+Shell wrappers, retries and subprocess fan-out all produce unreported actions in
+honest deployments, and an uncalibrated detector drowns its user in false
+positives until they switch it off.
+
+That baseline is the same shape as everything else here — the measurement exists
+(eBPF, egress proxies, audit logs), the base rate does not — so the same
+credibility machinery prices it, with the same K and the same Z.
+
+```bash
+curl 'https://bureau.freeboardrisk.com/v1/divergence?role=customer_support'
+```
+
+Two rules the module exists to enforce, both easy to get wrong:
+
+- **Unattested episodes are excluded, never counted as zero.** An episode with no
+  observer did not demonstrate zero divergence; it demonstrated nothing. Folding
+  it in as clean would drag every class rate toward zero in exactly the
+  deployments instrumented worst.
+- **Divergence is never pooled across attestation sources.** A kernel observer
+  counts `execve`, an egress proxy counts requests, an audit log counts whatever
+  the platform chose to log. An average over them is a number about nothing, so
+  the class is (role, source).
+
+#### Leave-one-out is load-bearing, not a refinement
+
+Building the baseline including the deployment under test does not merely weaken
+the result — it **inverts** it. A large outlier inflates the between-deployment
+variance the test depends on, so the class comes to expect exactly the
+heterogeneity the outlier created, and the outlier hides inside its own
+tolerance.
+
+Measured on a synthetic fleet of four honest deployments plus one diverging on
+64 of 80 episodes:
+
+| baseline | expected | p | flagged |
+|---|---:|---:|---|
+| includes the deployment under test | 21.6 | 0.077 | **no** |
+| holds it out | 11.0 | 1.2e-14 | **yes** |
+
+Holding it out can also leave deployments that are indistinguishable, sending K
+to infinity. That is not a degenerate case to refuse — it is the *tightest*
+class, and the one where an outlier is most visible — so the estimator falls
+through to the Binomial, which is the Beta-Binomial's limit as concentration
+grows.
+
+A flag means unusual, which is not the same as malicious: instrumentation drift
+looks identical from here.
+
 ### What the bureau stores
 
 Exactly what the SDK emits: validated wire records — counts, enums and hashes. No prompts, no payloads, no tool names, no raw identifiers. The API rejects anything else, tested the same way the SDK is. The bureau being open source is what makes that claim checkable rather than promised.
