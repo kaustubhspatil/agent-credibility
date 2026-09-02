@@ -253,6 +253,11 @@ class Handler(BaseHTTPRequestHandler):
         except BureauError as exc:
             self._send(exc.status, {"error": exc.message})
         except Exception as exc:  # noqa: BLE001
+            # Without this the handler drops the connection and a proxy in front
+            # reports a bare 502, which says nothing about what went wrong.
+            log.exception("unhandled")
+            self._send(500, {"error": f"{type(exc).__name__}"})
+        except Exception as exc:  # noqa: BLE001
             log.exception("unhandled")
             self._send(500, {"error": f"{type(exc).__name__}"})
 
