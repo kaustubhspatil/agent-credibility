@@ -113,7 +113,34 @@ class Store:
         self._conn.execute("PRAGMA journal_mode=WAL")
         self._conn.execute("PRAGMA synchronous=NORMAL")
         self._conn.executescript(SCHEMA)
+        self._migrate()
         self._conn.commit()
+
+    # Columns added after the first release. CREATE TABLE IF NOT EXISTS does
+    # nothing to a table that already exists, so a bureau upgraded in place
+    # keeps its old shape and every query touching a new column fails at
+    # runtime -- which is how the first upgrade of the live bureau broke.
+    _MIGRATIONS = (
+        ("episodes", "unreported_actions", "INTEGER NOT NULL DEFAULT 0"),
+        ("episodes", "attestation_source", "TEXT NOT NULL DEFAULT 'none'"),
+    )
+
+    def _migrate(self) -> None:
+        """Add any column this build expects and the file does not have.
+
+        Idempotent, and deliberately additive only: SQLite cannot drop a column
+        cheaply, and a bureau's whole purpose is to still hold what it was given
+        last year.
+        """
+        for table, column, decl in self._MIGRATIONS:
+            existing = {
+                r["name"]
+                for r in self._conn.execute(f"PRAGMA table_info({table})")
+            }
+            if column not in existing:
+                self._conn.execute(
+                    f"ALTER TABLE {table} ADD COLUMN {column} {decl}"
+                )
 
     def close(self) -> None:
         self._conn.close()

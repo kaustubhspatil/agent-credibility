@@ -275,3 +275,66 @@ def test_the_bureau_stores_only_wire_fields(store, tmp_path):
     # nothing resembling content, identifiers or tool names
     assert not cols & {"prompt", "payload", "content", "tool", "tool_name", "task_id"}
     assert "task_hash" in cols  # the hashed form only
+
+
+# --- upgrading a bureau in place -------------------------------------------
+
+OLD_SCHEMA = """
+CREATE TABLE episodes (
+    deployment_id TEXT NOT NULL, seq INTEGER NOT NULL, entry_hash TEXT NOT NULL,
+    role TEXT NOT NULL, envelope_class TEXT NOT NULL, task_hash TEXT NOT NULL,
+    pass_index INTEGER NOT NULL, resolved INTEGER, escalated INTEGER NOT NULL,
+    n_actions INTEGER NOT NULL, error_rate REAL NOT NULL, repeat_rate REAL NOT NULL,
+    tool_entropy REAL NOT NULL, n_irreversible INTEGER NOT NULL,
+    duration_ms INTEGER NOT NULL, received_at REAL NOT NULL,
+    PRIMARY KEY (deployment_id, seq));
+"""
+
+
+def test_an_existing_database_is_migrated_not_ignored(tmp_path):
+    """REGRESSION: CREATE TABLE IF NOT EXISTS does nothing to a table that
+    already exists, so a bureau upgraded in place kept its old shape and every
+    query touching a new column failed at runtime. That is exactly how the first
+    upgrade of the live bureau broke."""
+    import sqlite3
+
+    db = tmp_path / "old.db"
+    con = sqlite3.connect(db)
+    con.executescript(OLD_SCHEMA)
+    con.execute(
+        "INSERT INTO episodes VALUES"
+        " ('d',0,'h','ops','C000-V0','t',1,1,0,3,0.0,0.0,0.0,0,10,0.0)"
+    )
+    con.commit()
+    con.close()
+
+    store = Store(db)
+    cols = {r["name"] for r in store._conn.execute("PRAGMA table_info(episodes)")}
+    assert {"unreported_actions", "attestation_source"} <= cols
+    # and the data that was already there survived
+    assert store._conn.execute("select count(*) from episodes").fetchone()[0] == 1
+    assert store.attestation_sources("ops") == []
+    store.close()
+
+
+def test_migration_is_idempotent(tmp_path):
+    db = tmp_path / "b.db"
+    for _ in range(3):
+        s = Store(db)
+        cols = [r["name"] for r in s._conn.execute("PRAGMA table_info(episodes)")]
+        assert cols.count("attestation_source") == 1
+        s.close()
+
+
+def test_a_handler_error_returns_a_status_not_a_dropped_connection(tmp_path):
+    """A dropped connection surfaces as a bare 502 from whatever proxy is in
+    front, which says nothing about what went wrong."""
+    import inspect
+
+    from bureau.app import Handler
+
+    for method in (Handler.do_GET, Handler.do_POST):
+        src = inspect.getsource(method)
+        assert "except BureauError" in src
+        assert "except Exception" in src
+        assert "self._send(500" in src
