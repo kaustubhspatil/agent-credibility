@@ -21,7 +21,7 @@ And it is emphatically *per role*: across five roles K spans 7×, from a researc
 
 ## What this is
 
-The kill-switch experiment for an agent-insurance "base rate bureau", built to fail loudly if the idea does not work. Three corpora, ~40,000 episodes, 151 tests, every negative control reported.
+The kill-switch experiment for an agent-insurance "base rate bureau", built to fail loudly if the idea does not work. Three corpora, ~40,000 episodes, 181 tests, every negative control reported.
 
 It is no longer only an experiment. The SDK is on PyPI, the bureau is running, and the two talk to each other over TLS:
 
@@ -574,7 +574,7 @@ A power analysis (`credibility/power.py`) settles interpretation in advance, bec
 
 ```bash
 pip install -e ".[dev]" && pip install -r requirements-research.txt
-pytest                                                      # 151 tests
+pytest                                                      # 181 tests
 
 python examples/quickstart.py                               # SDK end to end, no network
 
@@ -597,9 +597,23 @@ Data: [`SWE-bench/SWE-smith-trajectories`](https://huggingface.co/datasets/SWE-b
 | `src/credibility/extract.py` | trajectories → per-episode behavioural features |
 | `src/credibility/buhlmann.py` | Bühlmann-Straub variance components, Z, bootstrap CI |
 | `src/credibility/experiment.py` | E1 class definitions, E3 holdout sweep, E4 cold start, E5 signals |
-| `src/freeboard/` | the SDK: envelope, recording, wire format, chain, state, estimator, sinks, bureau client |
-| `src/bureau/` | the receiving end: ingest, earned admission, pooled priors |
-| `src/lab/` | severity laboratory: hazards, canaries, three arms, awareness |
+| **the SDK** — zero dependencies, on PyPI | |
+| `src/freeboard/envelope.py` | task envelope derived from the tool manifest, class codes |
+| `src/freeboard/episode.py` | episode recording and out-of-band attestation |
+| `src/freeboard/wire.py` | the allow-list wire format and its validator |
+| `src/freeboard/chain.py` | tamper-evident sequencing and checkpoints |
+| `src/freeboard/state.py` | salt and chain head, durable across restarts |
+| `src/freeboard/estimate.py` | Bühlmann-Straub credibility, standard library only |
+| `src/freeboard/sinks.py` | JSONL spool and reader |
+| `src/freeboard/client.py` | bureau client and sink; fails open, never raises into the agent |
+| **the bureau** — server side, not published | |
+| `src/bureau/app.py` | ingest, priors, divergence, checkpoint anchoring |
+| `src/bureau/admission.py` | earned admission and the influence cap |
+| `src/bureau/anomaly.py` | auditing for numbers that are too good |
+| `src/bureau/divergence.py` | how much attestation divergence is normal |
+| `src/bureau/store.py` | SQLite persistence |
+| **the severity lab** | |
+| `src/lab/` | hazards, canary probes, three arms, the awareness matrix |
 | `deploy/` | systemd units, installer, Caddy and tunnel configs, verified backup |
 | `examples/quickstart.py` | instrument a fleet, emit records, price it |
 | `src/credibility/cx.py` | six-role corpus: per-role K, four-level decomposition |

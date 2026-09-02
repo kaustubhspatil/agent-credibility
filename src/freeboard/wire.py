@@ -22,9 +22,22 @@ from dataclasses import asdict
 from typing import Any
 
 from .envelope import Capability, Reversibility
-from .episode import EpisodeRecord
+from .episode import SCHEMA_VERSION, EpisodeRecord
 
-SCHEMA_VERSION = "1.0"
+# Fields added after schema 1.0. A record from an older client will not carry
+# them, and refusing it would mean every bureau upgrade broke every client that
+# had not upgraded yet -- the kind of lockstep requirement that strands a pilot
+# mid-flight. They may therefore be absent, and default when they are.
+#
+# Note the asymmetry: MISSING known fields are tolerated, UNKNOWN fields are
+# still refused. Relaxing the second would give up the allow-list, which is the
+# whole privacy guarantee. Relaxing the first only costs forward compatibility,
+# which is what we want.
+_OPTIONAL_SINCE_1_0 = {
+    "attested_actions": None,
+    "unreported_actions": 0,
+    "attestation_source": "none",
+}
 
 _HEX16 = re.compile(r"\A[0-9a-f]{16}\Z")
 _HEX64 = re.compile(r"\A[0-9a-f]{64}\Z")
@@ -102,11 +115,13 @@ def validate(payload: dict[str, Any]) -> None:
     unknown = set(payload) - set(_RULES)
     if unknown:
         raise WireViolation(f"unknown fields: {sorted(unknown)}")
-    missing = set(_RULES) - set(payload)
+    missing = set(_RULES) - set(payload) - set(_OPTIONAL_SINCE_1_0)
     if missing:
         raise WireViolation(f"missing fields: {sorted(missing)}")
 
     for field, (rule, nullable) in _RULES.items():
+        if field not in payload:
+            continue          # optional-since-1.0, checked above
         value = payload[field]
         if value is None:
             if not nullable:

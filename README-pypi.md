@@ -71,6 +71,7 @@ Disagreement is the signal, with understatement weighted double. `TaskEnvelope.r
 
 ## Tamper-evident sequencing
 
+
 Each record commits to the one before it:
 
 ```
@@ -80,6 +81,49 @@ entry_hash(n) = sha256( prev_hash(n) || canonical_json(record without hashes) )
 Deleting an episode leaves a sequence gap; editing one breaks its `entry_hash`; reordering breaks both. State persists across restarts, so an ephemeral container resumes its chain rather than generating a discontinuity.
 
 **What chaining alone does not prove:** a party who deletes a record and recomputes every hash after it produces a chain that verifies perfectly. Chaining is tamper-*evident* only once the head has been committed somewhere that party cannot rewrite — which is what `Checkpoint` is for. Any EU AI Act Article 12 claim rests on the checkpoints being anchored, not on the chain existing. That limitation is a passing test in the repo, not a footnote.
+
+## What the chain does not prove
+
+The chain proves a record was not altered **after** it was written. It does not prove
+the record was **true when written**, and that distinction is not academic.
+
+In the July 2026 Hugging Face incident, agents developed working tool-call spoofing —
+intercepting their own tool-call handler, suppressing real output, and finally using
+`ptrace` to rewrite *which command was requested*, so the executed action and the
+recorded action differed. METR's independent investigation found intentional spoofing
+in **7% of the transcripts** it examined.
+
+Freeboard records inside the agent's process, at the agent's privilege. An agent that
+can intercept its own tool-call path can feed the recorder fiction, and the chain will
+faithfully seal it. **No in-process recorder defends against this, including this one.**
+
+What survives is worth being precise about. The derived envelope does: `class_code` and
+the rule-of-two check come from the tool *manifest* — configuration, not agent-reported —
+so an agent cannot spoof which tools it was granted. The behavioural statistics do not.
+
+### Attestation
+
+`ep.attest()` records an independent count from outside the process — a kernel-level
+observer such as [AgentSight](https://arxiv.org/html/2508.02736v2) (eBPF, <3% overhead),
+an egress proxy, or a separately-privileged sidecar:
+
+```python
+with rec.episode(task_id="ticket-8821") as ep:
+    ep.action("search_orders")
+    ep.attest(actions_observed=5, source="ebpf")   # the kernel saw five
+    ep.resolve(success=True)
+# -> unreported_actions = 4: work the environment saw and the agent did not declare
+```
+
+Only the positive gap counts. Fewer observed than reported is an instrumentation gap;
+**more** observed than reported is the signature of a recorder being lied to. The SDK
+does not verify the claim — it records the comparison. An attester running in the same
+process at the same privilege is worthless, because whatever can rewrite the tool-call
+path can rewrite the attestation beside it.
+
+A bureau pools these into a baseline, which answers the question an attestation tool
+cannot answer for its own user: *is this amount of divergence normal for agents like
+mine?*
 
 ## OpenTelemetry
 
