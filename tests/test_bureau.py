@@ -440,4 +440,4 @@ def test_waiting_on_admission_does_not_look_like_missing_instrumentation(
 
     (entry,) = divergence_priors(store, "customer_support")
     assert entry["available"] is False
-    assert "2 more attesting but not yet admitted" in entry["reason"]
+    assert entry["reason"].startswith("2 deployment(s) attesting, none admitted")
