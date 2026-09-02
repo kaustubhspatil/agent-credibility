@@ -63,6 +63,8 @@ CREATE TABLE IF NOT EXISTS episodes (
     tool_entropy    REAL NOT NULL,
     n_irreversible  INTEGER NOT NULL,
     duration_ms     INTEGER NOT NULL,
+    unreported_actions INTEGER NOT NULL DEFAULT 0,
+    attestation_source TEXT NOT NULL DEFAULT 'none',
     received_at     REAL NOT NULL,
     PRIMARY KEY (deployment_id, seq)
 );
@@ -87,7 +89,8 @@ CREATE INDEX IF NOT EXISTS idx_deployments_role ON deployments(role, admitted);
 EPISODE_FIELDS = (
     "seq", "entry_hash", "role", "envelope_class", "task_hash", "pass_index",
     "resolved", "escalated", "n_actions", "error_rate", "repeat_rate",
-    "tool_entropy", "n_irreversible", "duration_ms",
+    "tool_entropy", "n_irreversible", "duration_ms", "unreported_actions",
+    "attestation_source",
 )
 
 
