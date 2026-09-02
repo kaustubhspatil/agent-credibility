@@ -182,9 +182,22 @@ def divergence_priors(store: Store, role: str) -> list[dict[str, Any]]:
     out = []
     for source in sorted(store.attestation_sources(role)):
         diverged, magnitude, ids = store.divergence_observations(role, source)
-        out.append(
-            class_divergence(diverged, magnitude, ids, role, source).as_dict()
-        )
+        entry = class_divergence(diverged, magnitude, ids, role, source).as_dict()
+        if not entry["available"]:
+            # "no deployment is reporting attested episodes" and "deployments are
+            # reporting them but none has earned admission yet" are different
+            # facts, and only the second one resolves itself by waiting. A caller
+            # told the first when the second is true goes looking for a bug in
+            # their instrumentation.
+            _, _, pending = store.divergence_observations(
+                role, source, admitted_only=False
+            )
+            n_pending = len(set(pending)) - entry["n_deployments"]
+            if n_pending > 0:
+                entry["reason"] += (
+                    f"; {n_pending} more attesting but not yet admitted"
+                )
+        out.append(entry)
     return out
 
 

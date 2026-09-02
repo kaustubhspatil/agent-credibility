@@ -21,7 +21,7 @@ And it is emphatically *per role*: across five roles K spans 7×, from a researc
 
 ## What this is
 
-The kill-switch experiment for an agent-insurance "base rate bureau", built to fail loudly if the idea does not work. Three corpora, ~40,000 episodes, 191 tests, every negative control reported.
+The kill-switch experiment for an agent-insurance "base rate bureau", built to fail loudly if the idea does not work. Three corpora, ~40,000 episodes, 192 tests, every negative control reported.
 
 It is no longer only an experiment. The SDK is on PyPI, the bureau is running, and the two talk to each other over TLS:
 
@@ -574,7 +574,7 @@ A power analysis (`credibility/power.py`) settles interpretation in advance, bec
 
 ```bash
 pip install -e ".[dev]" && pip install -r requirements-research.txt
-pytest                                                      # 191 tests
+pytest                                                      # 192 tests
 
 python examples/quickstart.py                               # SDK end to end, no network
 
