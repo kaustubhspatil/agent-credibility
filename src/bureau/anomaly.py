@@ -42,6 +42,7 @@ from dataclasses import dataclass
 __all__ = [
     "UnderreportingResult",
     "beta_binomial_cdf",
+    "binomial_cdf",
     "scan_class",
     "underreporting_test",
 ]
@@ -68,6 +69,28 @@ def beta_binomial_cdf(k: int, n: int, a: float, b: float) -> float:
     if k >= n:
         return 1.0
     return min(1.0, math.fsum(beta_binomial_pmf(i, n, a, b) for i in range(k + 1)))
+
+
+def binomial_cdf(k: int, n: int, p: float) -> float:
+    """P(X <= k) for X ~ Binomial(n, p).
+
+    The limit of the Beta-Binomial as the concentration grows: a class whose
+    deployments are indistinguishable. That case is not degenerate, it is the
+    tightest class there is, and it is precisely where an outlier should be
+    easiest to see -- so it needs a distribution rather than an error.
+    """
+    if k < 0:
+        return 0.0
+    if k >= n:
+        return 1.0
+    total = 0.0
+    for i in range(k + 1):
+        log_pmf = (
+            math.lgamma(n + 1) - math.lgamma(i + 1) - math.lgamma(n - i + 1)
+            + i * math.log(p) + (n - i) * math.log1p(-p)
+        )
+        total += math.exp(log_pmf)
+    return min(1.0, total)
 
 
 @dataclass(frozen=True)

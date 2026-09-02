@@ -211,6 +211,43 @@ class Store:
             ids.append(row["did"])
         return values, ids
 
+    def divergence_observations(
+        self, role: str, source: str, admitted_only: bool = True
+    ) -> tuple[list[float], list[float], list[str]]:
+        """Attested episodes only, for one role under one attestation source.
+
+        Episodes with no attester are excluded rather than counted as zero: an
+        unobserved episode did not demonstrate zero divergence, it demonstrated
+        nothing, and folding it in as a clean observation would drag every class
+        rate toward zero in exactly the deployments instrumented worst.
+        """
+        sql = (
+            "SELECT e.deployment_id AS did, e.unreported_actions AS u"
+            " FROM episodes e JOIN deployments d"
+            " ON d.deployment_id = e.deployment_id"
+            " WHERE e.role = ? AND e.attestation_source = ?"
+            " AND e.attestation_source != 'none'"
+        )
+        if admitted_only:
+            sql += " AND d.admitted = 1"
+        cur = self._conn.execute(sql, (role, source))
+        diverged: list[float] = []
+        magnitude: list[float] = []
+        ids: list[str] = []
+        for row in cur:
+            diverged.append(1.0 if row["u"] > 0 else 0.0)
+            magnitude.append(float(row["u"]))
+            ids.append(row["did"])
+        return diverged, magnitude, ids
+
+    def attestation_sources(self, role: str) -> list[str]:
+        cur = self._conn.execute(
+            "SELECT DISTINCT attestation_source FROM episodes"
+            " WHERE role = ? AND attestation_source != 'none'",
+            (role,),
+        )
+        return [r["attestation_source"] for r in cur]
+
     def role_summary(self) -> list[dict[str, Any]]:
         cur = self._conn.execute(
             "SELECT role,"
