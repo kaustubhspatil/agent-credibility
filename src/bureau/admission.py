@@ -30,12 +30,10 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass
 
-# Thresholds. These are policy, not physics, and they are deliberately
-# conservative to start: it is far cheaper to loosen an admission rule later
-# than to explain why a published base rate moved because of a stranger.
-MIN_EPISODES = 30          # enough that one deployment cannot dominate a thin class
-MIN_AGE_SECONDS = 3 * 3600  # a chain that appeared fully formed is not evidence
-MIN_CHECKPOINTS = 2         # a head committed more than once, over time
+# admission thresholds, conservative for now
+MIN_EPISODES = 30          # so one deployment can't dominate
+MIN_AGE_SECONDS = 3 * 3600  # needs some history
+MIN_CHECKPOINTS = 2         # head committed more than once
 
 
 @dataclass(frozen=True)

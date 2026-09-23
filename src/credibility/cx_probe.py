@@ -17,7 +17,7 @@ import re
 
 REPO = "cx-cmu/agent_trajectories"
 
-# Column-name shapes worth flagging, in the vocabulary these corpora tend to use.
+# column names worth flagging
 CANDIDATES = {
     "outcome": re.compile(
         r"(reward|success|solved|resolved|passed|correct|score|is_correct|label)",
@@ -46,7 +46,7 @@ def probe() -> None:
 
     try:
         entries = fs.ls(root, detail=True)
-    except Exception as exc:  # gated, unauthenticated, or renamed
+    except Exception as exc:  # gated, no auth, or renamed
         print(f"cannot list {REPO}: {type(exc).__name__}: {exc}")
         print("\nIf this says 403/GatedRepo, access has not been granted yet.")
         print("If it says 401, run:  hf auth login")
@@ -80,7 +80,7 @@ def probe() -> None:
             if cols:
                 print(f"    {kind:11s}: {', '.join(cols[:8])}")
 
-        # show a few short scalar values so the encoding is obvious
+        # print a few values
         if head:
             row = head[0]
             shown = 0

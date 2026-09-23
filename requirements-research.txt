@@ -1,4 +1,4 @@
-# For the research pipelines in src/credibility/ (not shipped on PyPI).
+# research deps for src/credibility/ (not on PyPI)
 #   pip install -r requirements-research.txt
 numpy>=1.26
 pandas>=2.1

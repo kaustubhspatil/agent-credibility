@@ -42,7 +42,7 @@ from .store import Store
 
 log = logging.getLogger("bureau")
 
-MAX_BODY = 8 * 1024 * 1024   # an accountless endpoint needs a hard ceiling
+MAX_BODY = 8 * 1024 * 1024   # hard cap for an open endpoint
 MAX_BATCH = 5_000
 
 
@@ -53,7 +53,7 @@ class BureauError(Exception):
         self.message = message
 
 
-# --- core logic, independent of HTTP so it can be tested directly ----------
+# core logic (no HTTP)
 
 
 def ingest_episodes(store: Store, records: list[dict[str, Any]]) -> dict[str, Any]:
@@ -85,7 +85,7 @@ def ingest_episodes(store: Store, records: list[dict[str, Any]]) -> dict[str, An
     start_hash = existing["head"] if existing else GENESIS
 
     if records[0]["seq"] != expected_seq:
-        # Not an error the client can fix by retrying blindly: tell it where we are.
+        # tell the client where we are
         raise BureauError(
             409,
             f"expected seq {expected_seq}, batch starts at {records[0]['seq']}",
@@ -184,11 +184,7 @@ def divergence_priors(store: Store, role: str) -> list[dict[str, Any]]:
         diverged, magnitude, ids = store.divergence_observations(role, source)
         entry = class_divergence(diverged, magnitude, ids, role, source).as_dict()
         if not entry["available"]:
-            # "no deployment is reporting attested episodes" and "deployments are
-            # reporting them but none has earned admission yet" are different
-            # facts, and only the second one resolves itself by waiting. A caller
-            # told the first when the second is true goes looking for a bug in
-            # their instrumentation.
+            # distinguish "nobody reporting" from "reporting but not admitted yet"
             _, _, pending = store.divergence_observations(
                 role, source, admitted_only=False
             )
@@ -222,7 +218,7 @@ def ingest_checkpoint(store: Store, payload: dict[str, Any]) -> dict[str, Any]:
             "checkpoints": _checkpoint_count(store, payload["deployment_id"])}
 
 
-# --- HTTP -----------------------------------------------------------------
+# HTTP
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -267,8 +263,7 @@ class Handler(BaseHTTPRequestHandler):
         except BureauError as exc:
             self._send(exc.status, {"error": exc.message})
         except Exception as exc:  # noqa: BLE001
-            # Without this the handler drops the connection and a proxy in front
-            # reports a bare 502, which says nothing about what went wrong.
+            # return an error instead of a bare 502 from the proxy
             log.exception("unhandled")
             self._send(500, {"error": f"{type(exc).__name__}"})
         except Exception as exc:  # noqa: BLE001
@@ -297,8 +292,7 @@ class Handler(BaseHTTPRequestHandler):
         except BureauError as exc:
             self._send(exc.status, {"error": exc.message})
         except Exception as exc:  # noqa: BLE001
-            # Without this the connection is dropped and the caller sees a bare
-            # 502 from whatever proxy is in front, which says nothing at all.
+            # same, avoid a bare 502
             self._send(500, {"error": f"internal error: {type(exc).__name__}"})
 
 

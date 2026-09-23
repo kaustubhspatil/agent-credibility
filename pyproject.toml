@@ -28,8 +28,7 @@ classifiers = [
     "Topic :: System :: Monitoring",
     "Typing :: Typed",
 ]
-# The SDK is stdlib only, on purpose: it drops into a customer's process and
-# should add nothing to their dependency review.
+# SDK is stdlib only
 dependencies = []
 
 [project.optional-dependencies]
@@ -40,9 +39,7 @@ Homepage = "https://github.com/kaustubhspatil/agent-credibility"
 Repository = "https://github.com/kaustubhspatil/agent-credibility"
 Documentation = "https://github.com/kaustubhspatil/agent-credibility/blob/main/docs/EVALUATING.md"
 
-# Only the SDK is published. The research package in this repo needs numpy and
-# pandas, and shipping it inside a zero-dependency distribution would be a lie;
-# it is reproduced from a clone, see requirements-research.txt.
+# only the SDK is published, research code needs numpy/pandas
 [tool.setuptools.packages.find]
 where = ["src"]
 include = ["freeboard*"]

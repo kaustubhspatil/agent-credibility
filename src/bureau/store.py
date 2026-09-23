@@ -82,10 +82,7 @@ CREATE INDEX IF NOT EXISTS idx_episodes_role ON episodes(role, envelope_class);
 CREATE INDEX IF NOT EXISTS idx_deployments_role ON deployments(role, admitted);
 """
 
-# The columns pulled out of a wire record into their own SQL fields. Anything
-# else in the record is kept in neither -- the wire schema is the contract, and
-# storing a subset of it is deliberate: the bureau needs frequency inputs, not
-# a mirror of the client.
+# columns stored as SQL fields, the rest isn't kept
 EPISODE_FIELDS = (
     "seq", "entry_hash", "role", "envelope_class", "task_hash", "pass_index",
     "resolved", "escalated", "n_actions", "error_rate", "repeat_rate",
@@ -94,9 +91,7 @@ EPISODE_FIELDS = (
 )
 
 
-# Fields a client may legitimately omit, with the value stored in their place.
-# Kept in step with freeboard.wire._OPTIONAL_SINCE_1_0 by a test; the two cannot
-# be imported into one another without tying the server build to an SDK version.
+# optional fields + defaults, kept in sync with freeboard.wire by a test
 FIELD_DEFAULTS = {
     "unreported_actions": 0,
     "attestation_source": "none",
@@ -125,10 +120,7 @@ class Store:
         self._migrate()
         self._conn.commit()
 
-    # Columns added after the first release. CREATE TABLE IF NOT EXISTS does
-    # nothing to a table that already exists, so a bureau upgraded in place
-    # keeps its old shape and every query touching a new column fails at
-    # runtime -- which is how the first upgrade of the live bureau broke.
+    # columns added later, migrate existing tables since CREATE IF NOT EXISTS won't
     _MIGRATIONS = (
         ("episodes", "unreported_actions", "INTEGER NOT NULL DEFAULT 0"),
         ("episodes", "attestation_source", "TEXT NOT NULL DEFAULT 'none'"),
@@ -154,7 +146,7 @@ class Store:
     def close(self) -> None:
         self._conn.close()
 
-    # -- deployments -------------------------------------------------------
+    # deployments
 
     def deployment(self, deployment_id: str) -> sqlite3.Row | None:
         cur = self._conn.execute(
@@ -191,7 +183,7 @@ class Store:
         )
         self._conn.commit()
 
-    # -- episodes ----------------------------------------------------------
+    # episodes
 
     def insert_episodes(self, deployment_id: str, records: Iterable[dict]) -> int:
         """Store a validated batch, and refuse to report success it did not have.
@@ -244,7 +236,7 @@ class Store:
     def commit(self) -> None:
         self._conn.commit()
 
-    # -- reading for the prior --------------------------------------------
+    # prior
 
     def class_observations(
         self, role: str, admitted_only: bool = True

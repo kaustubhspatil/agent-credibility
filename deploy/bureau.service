@@ -13,14 +13,11 @@ Environment=PYTHONPATH=/opt/freeboard/src
 Environment=PYTHONUNBUFFERED=1
 ExecStart=/usr/bin/python3 -m bureau.app --db /var/lib/freeboard/bureau.db --host 127.0.0.1 --port 8080
 
-# A Spot host is preempted without warning, so restarting must be the default
-# and must not give up. The SQLite WAL and the clients' local spools together
-# mean an unplanned stop costs availability, never data.
+# spot host can be preempted anytime, always restart
 Restart=always
 RestartSec=3
 
-# The bureau parses untrusted JSON from anyone on the internet. It should be
-# able to do almost nothing else.
+# sandbox it, it parses untrusted json
 NoNewPrivileges=yes
 PrivateTmp=yes
 PrivateDevices=yes

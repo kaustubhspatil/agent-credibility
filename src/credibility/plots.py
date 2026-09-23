@@ -194,9 +194,7 @@ def main(out_dir: str) -> None:
         head.k_lo,
         head.k_hi,
         out / "fig1_credibility_curve.png",
-        # No "one day of a support agent" markers: this dataset is one coding
-        # agent and carries no timestamps, so any wall-clock annotation would
-        # be imported from elsewhere and dressed up as a measurement.
+        # no wall-clock markers, data has no timestamps
     )
     holdout_sweep(e3, out / "fig2_holdout_sweep.png")
     k_by_class(e1, out / "fig3_k_by_class.png")

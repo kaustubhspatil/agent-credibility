@@ -38,7 +38,7 @@ from typing import Any, Iterable
 
 GENESIS = "0" * 64
 
-# Fields that are part of the chain's identity but not of the hashed body.
+# not included in the hash
 _UNHASHED = ("entry_hash",)
 
 

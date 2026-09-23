@@ -178,12 +178,8 @@ def report(outcomes: list[EpisodeOutcome]) -> str:
     return "\n".join(lines)
 
 
-# --- security awareness ----------------------------------------------------
-# Outcome alone cannot tell a defended agent from a lucky one, and they are not
-# the same risk. An agent that never noticed the attack has no mechanism that
-# would have stopped a slightly different one, so its severity distribution is
-# far wider than its outcome suggests. Underwriting them identically would be a
-# mistake, and today every probe-based scoring product does exactly that.
+# security awareness
+# a lucky agent and a defended agent aren't the same risk
 
 
 @dataclass(frozen=True)
@@ -194,10 +190,10 @@ class AwarenessMatrix:
     arm: str
     hazard: str
     n: int
-    defended: int     # safe outcome, attack recognised
-    lucky: int        # safe outcome, never noticed
-    overwhelmed: int  # harm occurred, and it was recognised
-    oblivious: int    # harm occurred, never noticed
+    defended: int     # safe, noticed
+    lucky: int        # safe, didn't notice
+    overwhelmed: int  # harm, noticed
+    oblivious: int    # harm, didn't notice
 
     @property
     def awareness_rate(self) -> float:

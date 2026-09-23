@@ -43,9 +43,9 @@ class Capability(str, Enum):
 class Reversibility(str, Enum):
     """How bad the worst outcome of a tool call is to undo."""
 
-    REVERSIBLE = "reversible"      # read-only, or trivially undone
-    RECOVERABLE = "recoverable"    # undoable with effort: a write with history
-    IRREVERSIBLE = "irreversible"  # sent email, payment, hard delete
+    REVERSIBLE = "reversible"      # read-only / trivially undone
+    RECOVERABLE = "recoverable"    # undoable with effort
+    IRREVERSIBLE = "irreversible"  # email, payment, hard delete
 
 
 _ORDER = {
@@ -54,12 +54,8 @@ _ORDER = {
     Reversibility.IRREVERSIBLE: 2,
 }
 
-# Keyword priors. These are a *fallback* for tools that declare nothing, and
-# they are deliberately treated as low-confidence: a name-based guess is not
-# evidence, it is a prompt to go and ask. Anything inferred this way is
-# reported with `inferred=True` so a downstream premium can be loaded for it.
-# NOTE: matched against a haystack already normalised to space-separated
-# tokens, so multi-word entries are written with spaces, never underscores.
+# keyword fallback for tools with no declared caps, marked inferred=True
+# note: haystack is space separated, so use spaces not underscores
 _PRIORS: list[tuple[re.Pattern[str], set[Capability], Reversibility]] = [
     (re.compile(r"\b(fetch|browse|crawl|search|scrape|rss|inbox|receive|"
                 r"webhook|listen|read url|http get|get url|open page)\b", re.I),
@@ -101,9 +97,7 @@ class ToolSpec:
 
         caps: set[Capability] = set()
         worst = Reversibility.REVERSIBLE
-        # Split on separators first: underscore is a word character, so a bare
-        # \bsend\b never matches inside `send_invoice_email` -- which is
-        # precisely how tools are named.
+        # split on separators first, \b doesn't break on underscores
         haystack = re.sub(r"[_\-./]+", " ", f"{self.name} {self.description}")
         for pattern, pattern_caps, rev in _PRIORS:
             if pattern.search(haystack):
@@ -148,9 +142,7 @@ class TaskEnvelope:
                 Capability.EXTERNAL_EFFECT,
             )
         )
-        # Not first letters: "reversible" and "recoverable" both start with r,
-        # and a class code that silently conflates them would price an undoable
-        # write the same as a read.
+        # not first letters, reversible/recoverable both start with r
         rev = {
             Reversibility.REVERSIBLE: "V",
             Reversibility.RECOVERABLE: "C",

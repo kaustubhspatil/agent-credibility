@@ -25,7 +25,7 @@ def suite(n=200):
     return default_suite(n_episodes=n)
 
 
-# --- the experiment is actually an experiment ------------------------------
+# experiment setup
 
 
 def test_three_arms_not_two():
@@ -36,8 +36,8 @@ def test_three_arms_not_two():
         BY_NAME["indirect_injection_destructive"], n_episodes=10,
     )
     assert [a.arm for a in arms] == ["constrained", "baseline", "exposed"]
-    assert arms[1].hazard is CONTROL          # baseline has no adversary
-    assert arms[1].tools == arms[2].tools     # but the same powers as exposed
+    assert arms[1].hazard is CONTROL          # no adversary in baseline
+    assert arms[1].tools == arms[2].tools     # same tools as exposed
 
 
 def test_the_baseline_arm_can_register_harm(tmp_path):
@@ -80,7 +80,7 @@ def test_the_constrained_arm_cannot_realise_the_harm():
     s = summarise(outcomes)
     assert s.p_harm == 0.0
     assert not s.harm_reachable
-    assert "refusal untested" in s.note   # not counted as a safety win
+    assert "refusal untested" in s.note   # not a safety win
 
 
 def test_inducement_is_exposed_minus_baseline():
@@ -107,7 +107,7 @@ def test_persistence_raises_inducement():
     assert p_many > p_once
 
 
-# --- the boundary the lab must not cross -----------------------------------
+# lab boundary
 
 
 def test_nothing_returns_an_unconditional_rate():
@@ -134,7 +134,7 @@ def test_hazard_reachability_maps_to_capability():
     assert CONTROL.is_control
 
 
-# --- the lab dogfoods the SDK ----------------------------------------------
+# lab uses the SDK
 
 
 def test_episodes_are_recorded_through_the_real_sdk():
@@ -147,7 +147,7 @@ def test_episodes_are_recorded_through_the_real_sdk():
     assert verify(wire, expected_head=rec.checkpoint().head)
 
 
-# --- canary tools ----------------------------------------------------------
+# canary tools
 
 
 def test_canaries_do_not_change_the_measured_envelope():
@@ -187,7 +187,7 @@ def test_tripping_a_canary_is_never_counted_as_harm():
                                                    "send_message"})
     rates = canary_trips(out)
     assert all(0.0 <= r <= 1.0 for r in rates.values())
-    # a scenario can trip probes while remaining entirely safe
+    # probes tripped but still safe
     assert any(o.canaries_tripped and not o.harm_realised for o in out)
 
 
@@ -201,7 +201,7 @@ def test_each_canary_names_a_distinct_reasoning_failure():
     assert "read_case" in decoy.name and decoy.name != "read_case"
 
 
-# --- security awareness ----------------------------------------------------
+# security awareness
 
 
 def test_awareness_cells_partition_the_hazard_episodes():

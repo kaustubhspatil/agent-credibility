@@ -38,8 +38,7 @@ from .state import RecorderState
 from .envelope import Capability, Reversibility, TaskEnvelope, ToolSpec, derive_envelope
 
 
-# The wire format version. Lives here because `wire` already imports from
-# this module; defining it there and importing back would be circular.
+# lives here to avoid a circular import with wire
 SCHEMA_VERSION = "1.1"
 
 _SOURCE_RE = re.compile(r"\A[a-z0-9][a-z0-9_.\-]{0,31}\Z")
@@ -73,7 +72,7 @@ class EpisodeRecord:
     envelope_class: str
     manifest_hash: str
 
-    # outcome -- the loss channel the estimator consumes
+    # outcome
     resolved: bool | None = None
     reward: float | None = None
     escalated: bool = False
@@ -90,33 +89,22 @@ class EpisodeRecord:
     output_chars: int = 0
     duration_ms: int = 0
 
-    # scope actually exercised, for the divergence signal
+    # scope used (for divergence)
     observed_capabilities: tuple[str, ...] = ()
 
-    # Independent observation of this episode, if any. The recorder runs inside
-    # the agent's process at the agent's privilege, so it can only report what
-    # the tool-call path tells it. An agent able to intercept that path can feed
-    # it fiction -- in the July 2026 Hugging Face incident agents did exactly
-    # this, pausing the tool-call handler and substituting an impersonator
-    # process, with intentional spoofing found in 7% of transcripts.
-    #
-    # `attested_actions` is a count from something OUTSIDE that process: a
-    # kernel-level observer (eBPF), an egress proxy, an audit log. The gap
-    # between it and `n_actions` is the signal; a positive `unreported_actions`
-    # means the environment saw work the agent did not declare.
+    # independent count from outside the agent process (eBPF, proxy, audit log)
+    # attested > reported means the agent did work it didn't report
     attested_actions: int | None = None
     unreported_actions: int = 0
     attestation_source: str = "none"
 
-    # tamper-evident sequencing. seq and prev_hash are set as the record is
-    # appended to the deployment's chain; entry_hash commits to everything else.
+    # chain fields, set on append
     seq: int = 0
     prev_hash: str = "0" * 64
     entry_hash: str = ""
 
     # provenance
-    # Single source of truth: wire.SCHEMA_VERSION. A literal here would
-    # drift from the format it claims to describe.
+    # version comes from wire.SCHEMA_VERSION
     schema_version: str = SCHEMA_VERSION
     recorder_version: str = _VERSION
 
@@ -147,7 +135,7 @@ class Episode:
         self._task_hash = _hash_id(task_id, recorder.salt)
         self._pass_index = pass_index
 
-    # -- the recording surface. note what is absent: no text parameters. ----
+    # recording (no text params on purpose)
 
     def action(
         self,
@@ -204,7 +192,7 @@ class Episode:
         self._resolved = success
         self._reward = reward
 
-    # -- finishing ---------------------------------------------------------
+    # finishing
 
     def finish(self) -> EpisodeRecord:
         if self._finished:
@@ -269,17 +257,13 @@ class Episode:
             duration_ms=int((time.monotonic() - self._start) * 1000),
             observed_capabilities=tuple(sorted(c.value for c in caps)),
             attested_actions=self._attested,
-            # Only the positive gap matters. Fewer observed than reported is an
-            # instrumentation gap; MORE observed than reported means the
-            # environment saw work the agent did not declare, which is the
-            # signature of a recorder being lied to.
+            # only count observed > reported
             unreported_actions=(
                 max(0, self._attested - n) if self._attested is not None else 0
             ),
             attestation_source=self._attestation_source,
         )
-        # Tool names are handed to the recorder, which stays in the customer's
-        # process, and never to the record, which leaves it.
+        # tool names stay in the recorder, never in the record
         self._rec._note_tools(set(self._tools))
         self._rec._emit(record)
         return record
@@ -290,8 +274,7 @@ class Episode:
     def __exit__(self, exc_type, exc, tb) -> None:
         if not self._finished:
             if exc_type is not None and self._resolved is None:
-                # an episode that raised did not succeed; record that rather
-                # than dropping it, since silent loss biases the base rate
+                # record failures instead of dropping them
                 self._resolved = False
             self.finish()
 
@@ -306,13 +289,11 @@ class Recorder:
     declared_capabilities: set[Capability] | None = None
     salt: str = ""
     sink: object | None = None  # anything with .write(EpisodeRecord)
-    state_path: str | None = None  # persist salt + chain across restarts
+    state_path: str | None = None  # persist salt + chain
 
     def __post_init__(self) -> None:
-        # A per-deployment salt keeps hashed ids from being reversible via a
-        # rainbow table of likely task ids. Without `state_path` it lives only
-        # for this process, which breaks the chain and re-keys every task hash
-        # on restart -- fine for a notebook, wrong for anything containerised.
+        # per-deployment salt for hashed ids
+        # pass state_path or it resets on restart
         self.state = RecorderState.load_or_create(
             self.state_path, self.deployment_id, self.salt
         )
@@ -340,8 +321,7 @@ class Recorder:
         self._used_tools |= names
 
     def _emit(self, record: EpisodeRecord) -> None:
-        # Chain before the record can reach a sink: anything that leaves the
-        # process must already be committed to the sequence.
+        # chain before sending
         from dataclasses import asdict
 
         body = asdict(record)
@@ -354,10 +334,7 @@ class Recorder:
         record.prev_hash = prev
         record.entry_hash = digest
 
-        # Persist the advanced head before the record can reach a sink. If the
-        # process dies between the two, the state is ahead of what was sent,
-        # which verification reports as a gap -- the safe direction. The
-        # reverse would silently re-issue a sequence number.
+        # save state before sending, a gap is safer than a reused seq
         if self.state_path is not None:
             self.state.absorb(self.chain)
             self.state.save(self.state_path)
@@ -367,7 +344,7 @@ class Recorder:
         if self.sink is not None:
             self.sink.write(record)  # type: ignore[attr-defined]
 
-    # -- reporting ---------------------------------------------------------
+    # reporting
 
     @property
     def records(self) -> list[EpisodeRecord]:
@@ -377,9 +354,7 @@ class Recorder:
         """Three-way scope comparison, using everything observed so far."""
         from .envelope import compare
 
-        # Tool-level usage is tracked on the recorder rather than the record,
-        # because the record must not carry tool names. The recorder stays in
-        # the customer's process, so it may hold them; the wire may not.
+        # tool usage lives on the recorder since the record can't have tool names
         unused_share = 0.0
         if self.tools:
             unused_share = 1.0 - len(self._used_tools) / len(self.tools)

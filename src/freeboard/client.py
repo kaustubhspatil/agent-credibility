@@ -69,12 +69,7 @@ class BureauClient:
     def _request(self, method: str, path: str, body: Any = None) -> dict[str, Any]:
         url = f"{self.base_url}{path}"
         data = json.dumps(body).encode() if body is not None else None
-        # A real User-Agent matters more than politeness here. urllib's default
-        # ("Python-urllib/3.x") is treated as a bot signature by common edge
-        # protections -- Cloudflare's Browser Integrity Check returns 1010 for
-        # it -- so a bureau behind any CDN would reject every SDK request while
-        # accepting curl. Identifying the client also lets a bureau operator
-        # see which versions are in the field.
+        # set a real User-Agent, urllib's default gets blocked by Cloudflare (1010)
         headers = {"User-Agent": USER_AGENT, "Accept": "application/json"}
         if data:
             headers["Content-Type"] = "application/json"
@@ -90,7 +85,7 @@ class BureauClient:
                 payload = {"error": raw.decode(errors="replace")[:200]}
             raise BureauError(exc.code, payload.get("error", "unknown"), payload) from exc
 
-    # -- routes ------------------------------------------------------------
+    # routes
 
     def submit(self, records: list[dict[str, Any]]) -> dict[str, Any]:
         return self._request("POST", "/v1/episodes", {"episodes": records})
@@ -128,12 +123,12 @@ class BureauSink:
         self.spool_path = Path(spool)
         self._spool = JsonlSink(self.spool_path)
         self.batch_size = batch_size
-        self.sent_through: int | None = None  # last seq the bureau confirmed
+        self.sent_through: int | None = None  # last confirmed seq
         self.last_prior: dict[str, Any] | None = None
         self.last_error: str | None = None
         self._pending = 0
 
-    # -- the sink interface ------------------------------------------------
+    # sink interface
 
     def write(self, record: Any) -> None:
         """Durability first: on disk before the network is even attempted."""
@@ -142,7 +137,7 @@ class BureauSink:
         if self._pending >= self.batch_size:
             self.flush()
 
-    # -- forwarding --------------------------------------------------------
+    # forwarding
 
     def _unsent(self) -> list[dict[str, Any]]:
         records = list(read_jsonl(self.spool_path))
@@ -158,7 +153,7 @@ class BureauSink:
         """
         try:
             records = self._unsent()
-        except Exception as exc:  # a corrupt spool must not kill the agent
+        except Exception as exc:  # bad spool shouldn't crash the agent
             self.last_error = f"spool unreadable: {exc}"
             log.warning("freeboard: %s", self.last_error)
             return None
@@ -170,10 +165,7 @@ class BureauSink:
             reply = self.client.submit(records)
         except BureauError as exc:
             if exc.status == 409 and retry_on_conflict:
-                # The bureau is ahead of what we thought it had confirmed --
-                # usually a flush that succeeded server-side after our
-                # connection dropped. It tells us where it is; resync and retry
-                # once rather than wedging forever on a conflict we can resolve.
+                # bureau is ahead (flush went through but we lost the reply), resync and retry once
                 expected = _expected_seq(exc.message)
                 if expected is not None:
                     self.sent_through = expected - 1

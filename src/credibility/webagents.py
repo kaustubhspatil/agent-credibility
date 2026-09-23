@@ -42,7 +42,7 @@ def load_episodes() -> tuple[pd.DataFrame, pd.DataFrame]:
     ann = _load("data/annotations.csv")
     ann["annotator_name"] = ann["annotator_name"].str.strip()
 
-    # --- a 'site' column per benchmark: the customer-like grouping ---------
+    # site column per benchmark
     site_maps: dict[str, pd.Series] = {}
 
     wa = _load("data/webarena.csv")
@@ -51,13 +51,12 @@ def load_episodes() -> tuple[pd.DataFrame, pd.DataFrame]:
     vwa = _load("data/visualwebarena.csv")
     site_maps["visualwebarena"] = vwa.set_index("task_name")["sites"]
 
-    # workarena has no sites; its category is the equivalent grouping
+    # workarena: use category
     wk = _load("data/workarena.csv")
     wk_key = wk.set_index("task_name")["category"]
     site_maps["workarena"] = wk_key
 
-    # assistantbench is a set of open web questions with no site structure;
-    # difficulty is the only grouping available and is a weak stand-in
+    # assistantbench: only difficulty available
     ab = _load("data/assistantbench.csv")
     site_maps["assistantbench"] = ab.set_index("task_name")["difficulty"]
 
@@ -67,18 +66,17 @@ def load_episodes() -> tuple[pd.DataFrame, pd.DataFrame]:
             return "unknown"
         val = m.get(row["task_id"])
         if isinstance(val, str):
-            # webarena tasks can list several sites; take the combination as
-            # the grouping rather than exploding the row
+            # webarena: combine multiple sites
             return val.strip("[]").replace("'", "").replace(", ", "+")
         return "unknown"
 
     ann["site"] = ann.apply(site_of, axis=1)
 
-    # workarena task_ids carry an l1/l2 level; keep it, it is a real risk driver
+    # keep the l1/l2 level
     lvl = wk.set_index("task_name")["level"]
     ann["level"] = ann["task_id"].map(lvl).fillna("na")
 
-    # --- loss channels ----------------------------------------------------
+    # loss channels
     ann = ann[ann["trajectory_success"].isin(["Successful", "Unsuccessful"])].copy()
     ann["loss_failure"] = (ann["trajectory_success"] == "Unsuccessful").astype(float)
     ann["loss_side_effect"] = (ann["trajectory_side_effect"] == "Yes").astype(float)
@@ -91,7 +89,7 @@ def load_episodes() -> tuple[pd.DataFrame, pd.DataFrame]:
     dup_mask = ann.duplicated(key, keep=False)
     duplicates = ann[dup_mask].copy()
 
-    # one row per trajectory: keep the first annotator deterministically
+    # first annotator per trajectory
     episodes = ann.sort_values("annotator_name").drop_duplicates(key, keep="first")
     return episodes.reset_index(drop=True), duplicates
 
@@ -106,7 +104,7 @@ def annotator_agreement(duplicates: pd.DataFrame) -> pd.DataFrame:
         pairs = pairs[pairs["size"] == 2]
         agree = (pairs["mean"].isin([0.0, 1.0])).mean()
         base = duplicates[channel].mean()
-        # chance agreement for a binary label at this base rate
+        # chance agreement
         chance = base**2 + (1 - base) ** 2
         kappa = (agree - chance) / (1 - chance) if chance < 1 else np.nan
         rows.append(

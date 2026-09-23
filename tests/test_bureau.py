@@ -72,7 +72,7 @@ def age_and_checkpoint(store, rec, hours=5, checkpoints=2):
         )
 
 
-# --- ingest correctness ----------------------------------------------------
+# ingest
 
 
 def test_accepts_a_clean_batch(store, tmp_path):
@@ -141,7 +141,7 @@ def test_an_empty_or_oversized_batch_is_refused(store):
         ingest_episodes(store, [])
 
 
-# --- admission: nobody moves a base rate for free --------------------------
+# admission
 
 
 def test_a_new_deployment_is_not_admitted(store, tmp_path):
@@ -166,7 +166,7 @@ def test_a_deployment_admitted_once_it_has_earned_it(store, tmp_path):
     age_and_checkpoint(store, rec)
     rec2, wire2 = fleet(tmp_path, "acme2", 0.2, 40, seed=9)
     ingest_episodes(store, list(wire2))
-    # re-submitting nothing new still re-evaluates on the next batch; force it
+    # force a re-evaluation
     row = store.deployment(rec.deployment_hash)
     decision = evaluate(row["n_episodes"], row["first_seen"], 2, True)
     assert decision.admitted
@@ -199,18 +199,17 @@ def test_a_prior_appears_once_two_deployments_are_admitted(store, tmp_path):
 def test_one_huge_contributor_cannot_become_the_class(store, tmp_path):
     """The cheapest poisoning attack is not many fake deployments, it is one
     enormous one -- Bühlmann weights by exposure."""
-    # below three contributors there is no meaningful majority to protect
+    # < 3 contributors, no majority to protect
     assert influence_cap(1) == 1.0
     assert influence_cap(2) == 1.0
-    # from three, no single contributor may hold a majority, however large
+    # >= 3, nobody gets a majority
     assert influence_cap(3) == 0.5
     assert influence_cap(20) == pytest.approx(0.2)
 
     capped = capped_weights([10.0, 10.0, 10.0, 10.0, 10.0, 10_000.0])
     total = sum(capped)
     assert capped[-1] < 10_000.0
-    # the guarantee is on the POST-cap share: capping against the uncapped
-    # total would let the attacker inflate its own ceiling
+    # cap on the post-cap share
     assert capped[-1] / total <= 0.5 + 1e-9
 
     big = capped_weights([1.0] * 20 + [1e9])
@@ -226,7 +225,7 @@ def test_capped_surplus_is_discarded_not_redistributed():
     assert capped[:5] == exposures[:5]
 
 
-# --- checkpoints -----------------------------------------------------------
+# checkpoints
 
 
 def test_checkpoint_anchors_and_counts(store, tmp_path):
@@ -264,7 +263,7 @@ def test_a_malformed_checkpoint_head_is_refused(store, tmp_path):
         )
 
 
-# --- what the bureau stores ------------------------------------------------
+# what gets stored
 
 
 def test_the_bureau_stores_only_wire_fields(store, tmp_path):
@@ -273,12 +272,12 @@ def test_the_bureau_stores_only_wire_fields(store, tmp_path):
     cols = {
         r[1] for r in store._conn.execute("PRAGMA table_info(episodes)").fetchall()
     }
-    # nothing resembling content, identifiers or tool names
+    # no content, ids or tool names
     assert not cols & {"prompt", "payload", "content", "tool", "tool_name", "task_id"}
-    assert "task_hash" in cols  # the hashed form only
+    assert "task_hash" in cols  # hashed only
 
 
-# --- upgrading a bureau in place -------------------------------------------
+# in-place upgrade
 
 OLD_SCHEMA = """
 CREATE TABLE episodes (
@@ -312,7 +311,7 @@ def test_an_existing_database_is_migrated_not_ignored(tmp_path):
     store = Store(db)
     cols = {r["name"] for r in store._conn.execute("PRAGMA table_info(episodes)")}
     assert {"unreported_actions", "attestation_source"} <= cols
-    # and the data that was already there survived
+    # existing data survives
     assert store._conn.execute("select count(*) from episodes").fetchone()[0] == 1
     assert store.attestation_sources("ops") == []
     store.close()
@@ -341,7 +340,7 @@ def test_a_handler_error_returns_a_status_not_a_dropped_connection(tmp_path):
         assert "self._send(500" in src
 
 
-# --- an old client must keep working -------------------------------------
+# old clients still work
 
 
 def as_an_old_client_would_have_sent(wire):
@@ -383,7 +382,7 @@ def test_a_client_from_before_attestation_is_still_accepted(store, tmp_path):
     ).fetchone()
     assert row["attestation_source"] == "none"
     assert row["unreported_actions"] == 0
-    # and it contributes nothing to a divergence baseline: no observer watched it
+    # unattested, not in the divergence baseline
     assert store.divergence_observations("customer_support", "none") == ([], [], [])
 
 

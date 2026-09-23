@@ -34,10 +34,10 @@ import pandas as pd
 
 from .buhlmann import bootstrap_k, components
 
-MIN_EPISODES = 12  # a deployment needs some exposure before it is a risk
+MIN_EPISODES = 12  # min exposure
 
 
-# --- class / deployment factorisations ------------------------------------
+# class / deployment splits
 
 FACTORISATIONS: dict[str, dict[str, list[str] | None]] = {
     # name: {class: [cols] or None for one class, deployment: [cols]}
@@ -143,8 +143,7 @@ def e3_holdout_sweep(
     df: pd.DataFrame,
     target: str,
     dep_cols: list[str],
-    # n_train must be >= 2: with one episode per deployment there are no
-    # within-deployment degrees of freedom and EPV is undefined.
+    # need n_train >= 2 for EPV
     train_sizes: tuple[int, ...] = (2, 3, 5, 10, 20, 40, 80, 160),
     seed: int = 17,
     k_from_pool: bool = True,
@@ -163,20 +162,18 @@ def e3_holdout_sweep(
     """
     sub = _filtered(df, dep_cols)
 
-    # One global shuffle, then a per-deployment running index. Every train size
-    # nests inside the next, so the sweep is a single consistent ordering
-    # rather than a fresh random split at each point.
+    # one shuffle, nested train sizes
     order = sub.sample(frac=1.0, random_state=seed).reset_index(drop=True)
     order["_i"] = order.groupby("_dep").cumcount()
 
-    # K as the bureau would supply it: estimated once from the whole pool.
+    # K from the full pool
     pool = components(sub[target].to_numpy(float), sub["_dep"].to_numpy())
 
     rows = []
     for n_train in train_sizes:
         train = order[order["_i"] < n_train]
         test = order[order["_i"] >= n_train]
-        # a deployment must have enough held-out episodes to score against
+        # enough held-out episodes
         ok = test["_dep"].value_counts()
         ok = ok[ok >= 8].index
         train, test = train[train["_dep"].isin(ok)], test[test["_dep"].isin(ok)]
@@ -190,7 +187,7 @@ def e3_holdout_sweep(
         weight = test.groupby("_dep")[target].size()
 
         idx = truth.index
-        # the class prior itself is always pooled; only K's source varies
+        # prior is always pooled
         source = pool if k_from_pool else comp
         z = np.asarray(source.z(n.reindex(idx).to_numpy(float)), dtype=float)
         pred_prior = np.full(len(idx), comp.mu)
@@ -300,7 +297,7 @@ def main(episodes_path: str, out_dir: str) -> None:
     out.mkdir(parents=True, exist_ok=True)
     raw = pd.read_parquet(episodes_path)
     raw["loss"] = (~raw["resolved"]).astype(float)
-    # tolerate parquet written before the pr_<n> family collapse landed
+    # handle older parquet files
     raw["task_family"] = raw["task_family"].str.replace(
         r"^pr_\d+$", "pr", regex=True
     )
@@ -311,7 +308,7 @@ def main(episodes_path: str, out_dir: str) -> None:
           f"{df.instance_id.nunique():,} distinct tasks | "
           f"loss rate {df.loss.mean():.4f}")
 
-    # Robustness: the same headline on each scaffold, run independently.
+    # robustness: same thing per scaffold
     print("\n--- headline K per scaffold (independent populations) ---")
     for scaffold in ("tool", "xml", "ticks"):
         s = prepare(raw, scaffold=scaffold)

@@ -8,10 +8,7 @@ Wants=network-online.target
 Type=simple
 User=sentinel
 
-# The connector token is read from the environment, never passed as an
-# argument. Anything on a command line is visible in `ps` to every user on the
-# box; this token authorises running a tunnel on the account, so it stays out
-# of the process list.
+# token from env, not argv (visible in ps)
 EnvironmentFile=/etc/cloudflared/token.env
 ExecStart=/usr/local/bin/cloudflared --no-autoupdate --loglevel info tunnel run
 

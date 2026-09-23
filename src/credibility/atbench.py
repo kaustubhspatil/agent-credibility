@@ -84,7 +84,7 @@ def envelope_frame(rows: list[dict]) -> pd.DataFrame:
     return pd.DataFrame(out)
 
 
-# --- metrics ---------------------------------------------------------------
+# metrics
 
 
 def auc(scores: np.ndarray, labels: np.ndarray) -> float:

@@ -24,15 +24,8 @@ from typing import Any
 from .envelope import Capability, Reversibility
 from .episode import SCHEMA_VERSION, EpisodeRecord
 
-# Fields added after schema 1.0. A record from an older client will not carry
-# them, and refusing it would mean every bureau upgrade broke every client that
-# had not upgraded yet -- the kind of lockstep requirement that strands a pilot
-# mid-flight. They may therefore be absent, and default when they are.
-#
-# Note the asymmetry: MISSING known fields are tolerated, UNKNOWN fields are
-# still refused. Relaxing the second would give up the allow-list, which is the
-# whole privacy guarantee. Relaxing the first only costs forward compatibility,
-# which is what we want.
+# fields added after 1.0, older clients may omit them
+# missing known fields are ok, unknown fields are still rejected
 _OPTIONAL_SINCE_1_0 = {
     "attested_actions": None,
     "unreported_actions": 0,
@@ -64,7 +57,7 @@ def _check_str(field: str, value: Any, rule: Any) -> None:
         raise WireViolation(f"{field}: {value!r} does not match {rule.pattern}")
 
 
-# field -> ("num" | "bool" | "int" | rule), and whether None is allowed
+# field -> (type, nullable)
 _RULES: dict[str, tuple[Any, bool]] = {
     "episode_id": (_HEX16, False),
     "deployment_id": (_HEX16, False),
@@ -121,7 +114,7 @@ def validate(payload: dict[str, Any]) -> None:
 
     for field, (rule, nullable) in _RULES.items():
         if field not in payload:
-            continue          # optional-since-1.0, checked above
+            continue          # optional since 1.0
         value = payload[field]
         if value is None:
             if not nullable:
@@ -152,11 +145,8 @@ def to_json(record: EpisodeRecord) -> str:
     return json.dumps(to_wire(record), separators=(",", ":"), sort_keys=True)
 
 
-# --- OpenTelemetry ---------------------------------------------------------
-# Attribute names follow the OTel gen_ai conventions where one exists, and a
-# reserved `agent.credibility.*` namespace where none does. Emitting attributes
-# rather than depending on the OTel SDK keeps this package dependency-free;
-# an integrator hands these to whatever tracer they already run.
+# OpenTelemetry
+# gen_ai names where they exist, agent.credibility.* otherwise
 
 _OTEL_MAP = {
     "role": "gen_ai.agent.name",

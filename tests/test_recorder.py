@@ -46,7 +46,7 @@ def _tools():
     ]
 
 
-# --- the leak test ---------------------------------------------------------
+# leak test
 
 
 def test_canary_never_reaches_the_wire():
@@ -71,9 +71,9 @@ def test_canary_never_reaches_the_wire():
     blob = to_json(record)
     assert CANARY not in blob
     assert "SSN" not in blob
-    # and not via the OTel path either
+    # not via OTel either
     assert CANARY not in json.dumps(to_otel_attributes(record))
-    # nor hiding in a key
+    # or in a key
     assert not any(CANARY in k for k in to_wire(record))
 
 
@@ -128,15 +128,15 @@ def test_ids_are_salted_so_they_are_not_guessable_across_deployments():
     for rec in (a, b):
         with rec.episode("ticket-1") as ep:
             ep.resolve(success=True)
-    # same task id, different deployments -> different hashes
+    # same task, different deployments -> different hashes
     assert a.records[0].task_hash != b.records[0].task_hash
-    # but stable within a deployment, which is what credibility needs
+    # stable within a deployment
     with a.episode("ticket-1") as ep:
         ep.resolve(success=True)
     assert a.records[0].task_hash == a.records[1].task_hash
 
 
-# --- the derived envelope --------------------------------------------------
+# derived envelope
 
 
 def test_rule_of_two_fires_only_on_all_three_capabilities():
@@ -175,7 +175,7 @@ def test_class_code_ignores_names_but_not_powers():
         ]
     )
     assert a.class_code == b.class_code
-    assert a.manifest_hash != b.manifest_hash  # names still distinguish them
+    assert a.manifest_hash != b.manifest_hash  # names still differ
 
 
 def test_reversible_and_recoverable_do_not_collide_in_the_class_code():
@@ -235,7 +235,7 @@ def test_keyword_priors_are_marked_inferred():
     assert explicit.inferred_tools == 0
 
 
-# --- divergence ------------------------------------------------------------
+# divergence
 
 
 def test_understating_scope_scores_higher_than_overstating():
@@ -272,7 +272,7 @@ def test_granted_but_unused_is_reported_not_resolved():
     assert div.unused_tool_share == pytest.approx(0.5)
 
 
-# --- episode statistics ----------------------------------------------------
+# episode stats
 
 
 def test_moments_are_what_the_estimator_expects():
@@ -372,8 +372,7 @@ def test_otel_attributes_are_flat_and_validated():
 @pytest.mark.parametrize(
     "name,expect_caps,expect_rev",
     [
-        # separator-joined names are the normal case and must not silently
-        # fall through to "no capabilities at all"
+        # separator-joined names should still match
         ("read_file", {Capability.PRIVATE_DATA}, Reversibility.REVERSIBLE),
         ("http_get", {Capability.UNTRUSTED_INPUT}, Reversibility.REVERSIBLE),
         ("query_customer_db", {Capability.PRIVATE_DATA}, Reversibility.REVERSIBLE),
@@ -405,10 +404,10 @@ def test_no_prior_matches_is_visible_rather_than_silent():
     """An unrecognised tool must not look like a safe one."""
     env = derive_envelope([ToolSpec("zzz_opaque_widget")])
     assert env.capabilities == frozenset()
-    assert env.inferred_tools == 1  # flagged as guessed, so it can be loaded
+    assert env.inferred_tools == 1  # flagged as inferred
 
 
-# --- tamper-evident sequencing --------------------------------------------
+# chain
 
 
 def _chained(n=5):
@@ -480,13 +479,13 @@ def test_a_rewritten_chain_self_verifies_and_only_the_checkpoint_catches_it():
     honest = Recorder(deployment_id="acme", role="ops", tools=_tools())
     for i in range(5):
         if i == 1:
-            continue  # the episode being disappeared
+            continue  # deleted episode
         with honest.episode(f"t{i}") as ep:
             ep.action("read_case")
             ep.resolve(success=(i % 2 == 0))
     rewritten = [to_wire(r) for r in honest.records]
 
-    assert verify(rewritten)                       # indistinguishable alone
+    assert verify(rewritten)                       # can't tell on its own
     assert not verify(rewritten, expected_head=real_head)
 
 
@@ -520,7 +519,7 @@ def test_chaining_does_not_reintroduce_a_leak_path():
     assert CANARY not in blob
 
 
-# --- out-of-band attestation -----------------------------------------------
+# attestation
 
 
 def test_attestation_records_the_gap_the_environment_saw():
@@ -573,7 +572,7 @@ def test_attestation_is_covered_by_the_chain():
         ep.resolve(success=True)
     wire = [to_wire(r) for r in rec.records]
     assert verify(wire, expected_head=rec.checkpoint().head)
-    # editing the attestation away breaks the chain like any other field
+    # removing attestation breaks the chain
     doctored = [dict(wire[0], unreported_actions=0, attested_actions=1)]
     assert not verify(doctored)
 

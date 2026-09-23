@@ -55,7 +55,7 @@ class RecorderState:
         self.seq = chain.seq
         self.head = chain.head
 
-    # -- persistence -------------------------------------------------------
+    # persistence
 
     def to_dict(self) -> dict:
         return {
@@ -81,7 +81,7 @@ class RecorderState:
             Path(tmp).unlink(missing_ok=True)
             raise
         try:
-            os.chmod(path, 0o600)  # best effort; a no-op on some filesystems
+            os.chmod(path, 0o600)  # best effort
         except OSError:
             pass
 

@@ -36,7 +36,7 @@ def _beta_bernoulli(a, b, n_risks, n_per, seed):
     return values, ids
 
 
-# --- closed form -----------------------------------------------------------
+# closed form
 
 
 @pytest.mark.parametrize("a,b", [(2.0, 8.0), (5.0, 5.0), (20.0, 30.0)])
@@ -44,9 +44,7 @@ def _beta_bernoulli(a, b, n_risks, n_per, seed):
 def test_recovers_the_beta_concentration(a, b, seed):
     values, ids = _beta_bernoulli(a, b, 300, 200, seed)
     comp = components(values, ids)
-    # VHM is a difference of large quantities and is the noisy term; +/-30% at
-    # 300 deployments is sampling variation, which is why K ships with an
-    # interval rather than as a point estimate.
+    # VHM is noisy, +/-30% at 300 deployments is expected
     assert comp.k == pytest.approx(a + b, rel=0.30)
     assert comp.mu == pytest.approx(a / (a + b), rel=0.10)
     assert not comp.vhm_was_truncated
@@ -64,7 +62,7 @@ def test_alike_deployments_never_earn_credibility():
     assert credibility_estimate(0.9, 500, comp) == pytest.approx(comp.mu, abs=0.08)
 
 
-# --- agreement with the research implementation ----------------------------
+# matches the research implementation
 
 
 @pytest.mark.parametrize("seed", [0, 1, 2, 3, 4])
@@ -130,7 +128,7 @@ def test_matches_on_the_real_corpus_if_it_has_been_extracted():
     mine = components(values, ids)
     theirs = reference.components(np.array(values), np.array(ids))
     assert mine.k == pytest.approx(theirs.k, rel=1e-9)
-    assert mine.k == pytest.approx(7.59, abs=0.05)  # the published headline
+    assert mine.k == pytest.approx(7.59, abs=0.05)  # published number
 
 
 def test_bootstrap_interval_brackets_the_estimate():
@@ -141,7 +139,7 @@ def test_bootstrap_interval_brackets_the_estimate():
     assert lo > 0
 
 
-# --- the estimator's interface to the recorder -----------------------------
+# recorder interface
 
 
 def test_z_and_episodes_for_z_are_inverses():
@@ -169,11 +167,10 @@ def test_losses_from_records_inverts_resolved_and_skips_unknown():
     with rec.episode("b") as ep:
         ep.resolve(success=False)
     with rec.episode("c") as ep:
-        pass  # no outcome recorded at all
+        pass  # no outcome
 
     values, ids = losses_from_records(rec.records)
-    # success -> 0 loss, failure -> 1 loss, unknown -> dropped rather than
-    # counted as a success, which would bias the base rate downward
+    # unknown outcomes dropped, not counted as success
     assert values == [0.0, 1.0]
     assert len(ids) == 2
     assert len(set(ids)) == 1
@@ -200,4 +197,4 @@ def test_mismatched_input_lengths_are_refused():
     with pytest.raises(ValueError):
         components([0.0, 1.0], [0, 1], weights=[1.0])
     with pytest.raises(ValueError):
-        components([0.0], [0])  # only one deployment
+        components([0.0], [0])  # one deployment

@@ -38,8 +38,7 @@ class JsonlSink:
     def __init__(self, path: str | Path, *, fsync: bool = False) -> None:
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        # Line-buffered append: each record is a complete line as soon as it is
-        # written, so a reader never sees half a record.
+        # line buffered so readers never see half a record
         self._handle = open(self.path, "a", encoding="utf-8", buffering=1)
         self._fsync = fsync
         self.written = 0

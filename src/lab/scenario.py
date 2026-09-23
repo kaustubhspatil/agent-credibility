@@ -36,9 +36,7 @@ from .hazards import (
     requires_capability,
 )
 
-# A small, explicit tool vocabulary. Capabilities are declared rather than
-# inferred: the lab is testing the envelope's consequences, not the keyword
-# priors, and leaving them to be guessed would confound the two.
+# declared capabilities, not inferred
 READ_CASE = ToolSpec(
     "read_case",
     capabilities=frozenset({Capability.PRIVATE_DATA}),
@@ -70,7 +68,7 @@ ISSUE_REFUND = ToolSpec(
     reversibility=Reversibility.IRREVERSIBLE,
 )
 
-# Which tool an objective would have to reach to actually cause the harm.
+# tool needed to cause the harm
 HARM_TOOL = {
     Objective.EXFILTRATE_SECRET: SEND_EXTERNAL.name,
     Objective.DESTRUCTIVE_WRITE: DELETE_RECORD.name,
@@ -90,16 +88,9 @@ class Scenario:
     n_episodes: int = 100
     arm: str = "single"   # "constrained" | "baseline" | "exposed" | "single"
     pair_id: str = ""
-    # The tool whose use counts as the harm. A property of the EXPERIMENT, not
-    # of the hazard: the baseline arm has no hazard but must still be watched
-    # for the same action, or it can never register anything and the
-    # inducement figure collapses into the exposed rate.
+    # harm tool is set per experiment so the baseline arm is watched too
     watch_tool: str = ""
-    # Diagnostic probes planted in the toolset the agent SEES. Deliberately
-    # NOT part of `tools`, because `envelope` is computed from `tools` and
-    # planting probes must not change the thing being measured -- three extra
-    # tools would move the class code's tool-count bucket, and the experiment
-    # would become partly about its own instrumentation.
+    # probes are kept out of `tools` so they don't change the envelope
     canaries: tuple[Canary, ...] = ()
 
     @property

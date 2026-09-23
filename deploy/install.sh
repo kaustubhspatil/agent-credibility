@@ -1,23 +1,14 @@
 #!/usr/bin/env bash
-# Install or update the Freeboard bureau on a Debian/Ubuntu host.
-# Idempotent: safe to re-run for a deploy.
+# Install or update the bureau on Debian/Ubuntu. Safe to re-run.
 #
 #   sudo bash install.sh [git-ref]
 #
-# ALWAYS FETCH THIS SCRIPT BY COMMIT SHA, not by branch:
+# fetch this script by commit SHA, branch URLs on raw.githubusercontent.com get cached:
 #
 #   SHA=$(git rev-parse HEAD)
 #   curl -fsSL https://raw.githubusercontent.com/<owner>/<repo>/$SHA/deploy/install.sh
 #
-# raw.githubusercontent.com caches branch URLs. Fetching .../main/deploy/install.sh
-# can silently serve a stale script, so a deploy appears to run and quietly does
-# nothing -- which is exactly how this box sat several commits behind while two
-# separate fixes were "deployed". A SHA URL is content-addressed and cannot go
-# stale, and it makes the deploy reproducible besides.
-#
-# Deliberately no TLS here. The service binds to 127.0.0.1 and a reverse proxy
-# in front terminates TLS -- see deploy/caddy.example. Putting certificate
-# handling inside a stdlib http.server would be the wrong place for it.
+# no TLS here, the reverse proxy handles it (see deploy/caddy.example)
 set -euo pipefail
 
 REF="${1:-main}"
@@ -29,13 +20,8 @@ echo "==> user and directories"
 id -u freeboard >/dev/null 2>&1 || useradd --system --home "$APP_DIR" --shell /usr/sbin/nologin freeboard
 mkdir -p "$APP_DIR" "$DATA_DIR"
 
-# git refuses to operate on a tree it does not own, and after the first install
-# this one belongs to the service user while the installer runs as root. Without
-# this the UPDATE path fails ("dubious ownership") while a fresh install
-# succeeds -- so the script looks idempotent and is not.
-# --system, not --global: sudo preserves the invoking user's HOME, so --global
-# writes to /home/<user>/.gitconfig while git itself runs as uid 0 and reads
-# /root/.gitconfig. The setting silently lands where nothing will read it.
+# mark the repo as safe or updates fail with "dubious ownership"
+# use --system since sudo keeps the user's HOME
 git config --system --add safe.directory "$APP_DIR" 2>/dev/null || true
 
 echo "==> source at ref ${REF}"
@@ -47,16 +33,14 @@ else
   git clone --depth 1 --branch "$REF" "$REPO" "$APP_DIR"
 fi
 
-# The bureau needs no third-party packages. That is the point: nothing to
-# install means nothing to break on an unattended reboot after a preemption.
+# no third-party packages needed
 python3 - <<'PY'
 import sys
 assert sys.version_info >= (3, 10), f"need python 3.10+, found {sys.version}"
 print("python", sys.version.split()[0], "ok")
 PY
 
-# Record the deployed revision before handing the tree to the service user:
-# afterwards git refuses to read it as root ("dubious ownership").
+# record the revision before chown (git refuses after)
 REV="$(git -C "$APP_DIR" rev-parse --short HEAD)"
 
 chown -R freeboard:freeboard "$APP_DIR" "$DATA_DIR"

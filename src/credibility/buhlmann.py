@@ -28,12 +28,12 @@ class Components:
     """Variance decomposition for one risk class."""
 
     mu: float          # collective (class) mean
-    epv: float         # s^2 : expected process variance, within-deployment
-    vhm: float         # a   : variance of hypothetical means, between-deployment
-    k: float           # EPV / VHM -- the credibility constant, in episodes
+    epv: float         # EPV, within-deployment
+    vhm: float         # VHM, between-deployment
+    k: float           # K = EPV / VHM
     n_total: int
     n_risks: int
-    vhm_was_truncated: bool  # True when the raw VHM estimate came out negative
+    vhm_was_truncated: bool  # raw VHM was negative
 
     def z(self, n: np.ndarray | float) -> np.ndarray | float:
         """Credibility weight on own experience after n episodes."""
@@ -83,7 +83,7 @@ def components(
     n_total = n_i.sum()
     mu = float(sum_i.sum() / n_total)
 
-    # ---- EPV: pooled within-deployment variance --------------------------
+    # EPV
     resid = values - x_i[inv]
     within_ss = float(np.sum(weights * resid**2))
     dof = float(n_total - n_risks)
@@ -91,7 +91,7 @@ def components(
         raise ValueError("no within-deployment degrees of freedom")
     epv = within_ss / dof
 
-    # ---- VHM: between-deployment variance, debiased ----------------------
+    # VHM (debiased)
     between_ss = float(np.sum(n_i * (x_i - mu) ** 2))
     # E[between_ss] = (n_risks - 1) * EPV + (n_total - sum n_i^2 / n_total) * VHM
     scale = float(n_total - np.sum(n_i**2) / n_total)

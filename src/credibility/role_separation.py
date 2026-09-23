@@ -47,13 +47,13 @@ def r1_decomposition(
     counts = d["_dep"].value_counts()
     d = d[d["_dep"].isin(counts[counts >= min_episodes].index)]
 
-    # level 1: episode noise within a deployment
+    # level 1: within deployment
     epv = components(d[channel].to_numpy(float), d["_dep"].to_numpy()).epv
 
     tab = deployment_table(df, channel, dep_cols, min_episodes)
     mu = float(np.average(tab["rate"], weights=tab["n"]))
 
-    # level 3: between roles, debiased by the sampling noise of a role mean
+    # level 3: between roles (debiased)
     role_stats = (
         tab.assign(w=tab["n"])
         .groupby("role")
@@ -75,7 +75,7 @@ def r1_decomposition(
     between_noise = float(np.mean(epv / role_stats["n"]))
     between = max(between_raw - between_noise, 0.0)
 
-    # level 2: deployments within their role, debiased likewise
+    # level 2: deployments within role (debiased)
     merged = tab.merge(
         role_stats["mean"].rename("role_mean"), left_on="role", right_index=True
     )
@@ -120,15 +120,13 @@ def r2_cross_role_cold_start(
         own_role_prior = float(np.average(same["rate"], weights=same["n"]))
         pooled_prior = float(np.average(others["rate"], weights=others["n"]))
 
-        # a deliberately wrong role: the one whose mean is furthest away, i.e.
-        # the worst case a mis-specified registry entry could produce
+        # wrong role = furthest mean (worst case)
         role_means = other_roles.groupby("role").apply(
             lambda g: np.average(g["rate"], weights=g["n"]), include_groups=False
         )
         wrong_role = role_means.sub(own_role_prior).abs().idxmax()
         wrong_prior = float(role_means[wrong_role])
-        # worst case is the headline, but a registry mistake is not always the
-        # most distant entry, so report the average wrong entry too
+        # also report the average wrong role
         wrong_avg = float(role_means.mean())
 
         truth = float(target["rate"])

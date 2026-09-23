@@ -52,9 +52,9 @@ class ClassDivergence:
     source: str
     n_deployments: int
     n_attested_episodes: int
-    rate: float                  # share of attested episodes with any divergence
-    mean_unreported: float       # mean unreported actions, over attested episodes
-    k: float                     # credibility constant for the divergence rate
+    rate: float                  # share of attested episodes that diverged
+    mean_unreported: float       # mean unreported actions
+    k: float                     # credibility constant
     available: bool
     reason: str = ""
 
@@ -158,10 +158,7 @@ def divergence_test(
             deployment_id, n_attested, n_diverged, float("nan"), float("nan"), False
         )
 
-    # An infinite K means the held-out deployments were indistinguishable from
-    # one another -- the tightest possible class, and the case where an outlier
-    # is most visible. Beta-Binomial converges to Binomial there, so use it
-    # rather than refusing to answer.
+    # K = inf means deployments look identical, fall back to binomial
     if math.isfinite(cls.k):
         a, b = cls.rate * cls.k, (1.0 - cls.rate) * cls.k
         below = beta_binomial_cdf(n_diverged - 1, n_attested, a, b)

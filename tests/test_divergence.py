@@ -55,7 +55,7 @@ def fleet(tmp_path, store, name, n, divergence_rate, source="ebpf", seed=0,
     return rec
 
 
-# --- the two rules the module exists to enforce ----------------------------
+# the two core rules
 
 
 def test_unattested_episodes_are_excluded_not_counted_as_zero(store, tmp_path):
@@ -66,7 +66,7 @@ def test_unattested_episodes_are_excluded_not_counted_as_zero(store, tmp_path):
     fleet(tmp_path, store, "blind", 200, 0.0, source="none", seed=2)
 
     diverged, _, ids = store.divergence_observations("ops", "ebpf")
-    assert len(diverged) == 40           # the 200 unattested episodes are absent
+    assert len(diverged) == 40           # unattested episodes excluded
     assert set(ids) == {r for r in ids}
     assert 0.2 < sum(diverged) / len(diverged) < 0.8
 
@@ -88,7 +88,7 @@ def test_sources_are_never_pooled(store, tmp_path):
     assert len(ebpf_rows) == 80          # only the two ebpf deployments
 
 
-# --- the baseline ----------------------------------------------------------
+# baseline
 
 
 def test_a_baseline_needs_more_than_one_deployment(store, tmp_path):
@@ -117,7 +117,7 @@ def test_only_admitted_deployments_inform_the_baseline(store, tmp_path):
     assert p["divergence_rate"] < 0.5
 
 
-# --- the test a customer actually asks -------------------------------------
+# customer-facing test
 
 
 def _cls(rate, k=6.0, n=200, deps=5):
@@ -163,7 +163,7 @@ def test_the_test_uses_the_upper_tail():
     assert not low.flagged and high.flagged
 
 
-# --- leave-one-out, and why it is not optional -----------------------------
+# leave-one-out
 
 
 def _fleet_arrays(honest_rate=0.18, outlier_rate=0.80, n=80, n_honest=4, seed=0):
@@ -195,7 +195,7 @@ def test_an_outlier_hides_inside_a_class_it_is_part_of():
     k = int(sum(v for v, i in zip(diverged, ids) if i == "outlier"))
 
     included = divergence_test("outlier", k, n, cls_with)
-    assert not included.flagged          # hidden by the variance it created
+    assert not included.flagged          # hidden by its own variance
 
     from bureau.divergence import divergence_scan
 

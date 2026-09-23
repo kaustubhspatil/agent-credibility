@@ -34,10 +34,7 @@ def _simulate(a, b, n_risks, n_per_risk, seed=0):
 def test_recovers_beta_concentration(a, b, seed):
     values, ids, _ = _simulate(a, b, n_risks=300, n_per_risk=200, seed=seed)
     comp = components(values, ids)
-    # VHM is a difference of two large quantities and is the noisy component;
-    # +/-30% on K with 300 deployments is sampling variation, not bias. This is
-    # exactly why the real analysis reports a bootstrap interval on K rather
-    # than a point estimate.
+    # VHM is noisy, +/-30% on K is expected at 300 deployments
     assert comp.k == pytest.approx(a + b, rel=0.30)
     assert comp.mu == pytest.approx(a / (a + b), rel=0.10)
     assert not comp.vhm_was_truncated
@@ -58,13 +55,11 @@ def test_identical_deployments_give_no_credibility():
     values = rng.binomial(1, 0.3, size=n_risks * n_per).astype(float)
     ids = np.repeat(np.arange(n_risks), n_per)
     comp = components(values, ids)
-    # True VHM is 0, so the debiased estimate lands on either side of zero by
-    # chance; asserting the truncation flag would be a coin flip. Assert the
-    # decision instead: no realistic amount of exposure earns credibility.
+    # true VHM is 0, so check the decision not the flag
     assert comp.vhm < 0.01 * comp.epv
     assert comp.k > 1000
     assert comp.z(500) < 0.5
-    # the estimate stays pinned near the class mean even with heavy experience
+    # stays near the class mean
     assert credibility_estimate(0.9, 500, comp) == pytest.approx(comp.mu, abs=0.08)
 
 

@@ -78,7 +78,7 @@ def test_a_hand_edited_line_is_caught_on_read(tmp_path):
     lines[1] = json.dumps(doctored)
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
-    # the record still validates -- it is well-formed -- but the chain does not
+    # record is valid but the chain isn't
     back = list(read_jsonl(path))
     result = verify(back)
     assert not result

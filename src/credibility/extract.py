@@ -17,9 +17,8 @@ import re
 from collections import Counter
 from dataclasses import asdict, dataclass
 
-# --- action parsing -------------------------------------------------------
-# The three splits are the same agent behind three different action encodings.
-# We normalise all of them to a list of (command, raw) pairs.
+# action parsing
+# three splits, three encodings, normalised to (command, raw)
 
 _XML_FN = re.compile(r"<function=([A-Za-z0-9_\-]+)")
 _TICKS = re.compile(r"```(?:bash|sh|python)?\n(.*?)```", re.S)
@@ -30,10 +29,7 @@ _ERROR_MARKERS = re.compile(
     r"AssertionError|FAILED |exit code [1-9]",
     re.M,
 )
-# Actions that can mutate the customer's asset. A coarse exposure proxy: we see
-# the action name but not its arguments, so `str_replace_editor` counts even
-# when it was only used to view a file. Coarse is acceptable here -- the
-# question is whether deployments separate, not whether the label is perfect.
+# actions that can modify things (coarse, we only see the name)
 _MUTATING_NAMES = frozenset({
     "str_replace_editor", "insert", "create", "edit", "write", "apply_patch",
     "sed", "rm", "mv", "mkdir", "chmod", "git", "tee", "patch",
@@ -78,7 +74,7 @@ def parse_actions(messages: list[dict], scaffold: str) -> list[str]:
             continue
 
         if scaffold == "tool":
-            # Native tool calls: prefer the structured `action` field.
+            # prefer the structured action field
             calls = msg.get("tool_calls") or []
             if calls:
                 for call in calls:
@@ -143,7 +139,7 @@ class Episode:
     repo: str
     task_family: str
     resolved: bool
-    # behavioural signals -- the sufficient statistics that would leave a tenant
+    # behavioural signals
     n_turns: int
     n_actions: int
     n_distinct_actions: int
@@ -187,10 +183,7 @@ def episode_from_row(row: dict, scaffold: str) -> Episode | None:
 
     instance_id = row["instance_id"]
     repo = instance_id.split(".")[0]
-    # instance ids look like  owner__repo.<commit>.<mutation-family>__<hash>,
-    # except the PR-derived ones, which end `.pr_<number>`. Left as-is every PR
-    # number becomes its own "family" and the covariate is useless, so collapse
-    # them to a single `pr` family.
+    # collapse pr_<n> families into one 'pr' family
     parts = instance_id.split(".")
     task_family = parts[2].split("__")[0] if len(parts) > 2 else "unknown"
     if re.fullmatch(r"pr_\d+", task_family):
@@ -228,8 +221,7 @@ def run(out_path: str, limit_per_split: int | None = None) -> None:
 
     frames = []
     for scaffold in ("tool", "xml", "ticks"):
-        # Write each split as it finishes. A long stream that dies (or gets
-        # killed) two splits in should not lose two splits of work.
+        # write each split as it finishes
         part = out.with_name(f"{out.stem}.{scaffold}.parquet")
         if part.exists():
             print(f"{scaffold}: reusing {part.name}", flush=True)

@@ -42,13 +42,13 @@ __all__ = [
 class Components:
     """The variance decomposition for one risk class."""
 
-    mu: float           # the class mean: what a brand-new deployment is priced at
-    epv: float          # expected process variance, within a deployment
-    vhm: float          # variance of hypothetical means, between deployments
-    k: float            # EPV / VHM, in episodes. inf when deployments look alike
+    mu: float           # class mean (price for a new deployment)
+    epv: float          # EPV
+    vhm: float          # VHM
+    k: float            # K = EPV / VHM, inf if deployments look alike
     n_total: float
     n_risks: int
-    vhm_was_truncated: bool  # True when the debiased VHM estimate came out <= 0
+    vhm_was_truncated: bool  # debiased VHM <= 0
 
     def z(self, n: float) -> float:
         """Credibility weight on own experience after n episodes."""
@@ -111,9 +111,7 @@ def components(
         raise ValueError("no within-deployment degrees of freedom")
     epv = within_ss / dof
 
-    # VHM: between-deployment variance, debiased for the sampling noise of the
-    # deployment means themselves. Observed spread always overstates the true
-    # spread, and by exactly (n_risks - 1) * EPV in expectation.
+    # VHM debiased for noise in the deployment means
     between_ss = math.fsum(
         exposure[rid] * (means[rid] - mu) ** 2 for rid in exposure
     )

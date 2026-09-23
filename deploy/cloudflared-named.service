@@ -7,9 +7,7 @@ Wants=network-online.target
 [Service]
 Type=simple
 User=sentinel
-# A named tunnel, unlike the quick tunnel it replaces, keeps its hostname
-# across restarts. That is the difference between something that proves the
-# path works and something a design partner can configure once and forget.
+# named tunnel, hostname stays the same across restarts
 ExecStart=/usr/local/bin/cloudflared --config /etc/cloudflared/config.yml tunnel run
 Restart=always
 RestartSec=5

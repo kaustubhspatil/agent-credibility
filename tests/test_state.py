@@ -138,4 +138,4 @@ def test_head_is_persisted_before_the_sink_sees_the_record(tmp_path):
     for t in ("t0", "t1"):
         with rec.episode(t) as ep:
             ep.resolve(success=True)
-    assert seen == [1, 2]  # state already advanced past the record being sent
+    assert seen == [1, 2]  # state already ahead of the sent record

@@ -136,7 +136,7 @@ def main(out_dir: str = "out") -> None:
           f"   {dec['share_role']:.1%}")
 
 
-# --- analysis --------------------------------------------------------------
+# analysis
 
 def analysable(df: pd.DataFrame, min_episodes: int = 8) -> pd.DataFrame:
     """Roles with a comparable outcome, deployments with enough exposure.

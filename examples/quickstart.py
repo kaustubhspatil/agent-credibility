@@ -50,7 +50,7 @@ SUPPORT_TOOLS = [
     ),
 ]
 
-# three customers running the same agent, with genuinely different risk
+# three customers, same agent, different risk
 FLEET = {"northwind": 0.18, "globex": 0.31, "initech": 0.52}
 
 
@@ -88,21 +88,19 @@ def run_deployment(name, true_failure_rate, n, rng, workdir):
 def main() -> None:
     workdir = Path(tempfile.mkdtemp(prefix="freeboard-quickstart-"))
 
-    # a fresh stream per deployment, and enough episodes that the observed rate
-    # lands near the true one -- otherwise the last column reads as though the
-    # estimator were wrong when it is only the simulation being noisy
+    # new stream per deployment, enough episodes to keep simulation noise low
     recorders = {
         name: run_deployment(name, rate, 250, random.Random(seed), workdir)
         for seed, (name, rate) in enumerate(FLEET.items())
     }
 
-    # 1. what actually leaves the customer's process
+    # 1. what leaves the process
     first = next(iter(read_jsonl(workdir / "northwind.jsonl")))
     print("one wire record -- every field a number, an enum or a hash:")
     for key in sorted(first):
         print(f"    {key:24s} {first[key]}")
 
-    # 2. the derived envelope, and where it disagrees with the declaration
+    # 2. derived envelope vs declared
     rec = recorders["northwind"]
     env, div = rec.envelope, rec.divergence()
     print(f"\nenvelope class        : {env.class_code}")
@@ -113,7 +111,7 @@ def main() -> None:
           f"{sorted(c.value for c in div.granted_but_not_declared)}")
     print(f"divergence score      : {div.score}  (understated: {div.understated})")
 
-    # 3. the log, read back and checked -- this is the auditor's path
+    # 3. read the log back and verify
     print("\nreading the logs back and verifying each chain:")
     replayed = []
     for name in FLEET:
@@ -123,7 +121,7 @@ def main() -> None:
         print(f"    {name:10s} {len(records):4d} records  chain ok: {bool(result)}")
         replayed.extend(records)
 
-    # 4. price the fleet from the reloaded file, not from memory
+    # 4. price the fleet from the saved file
     values, ids = losses_from_records(replayed)
     comp = components(values, ids)
     print(f"\npooled across the fleet: mu = {comp.mu:.3f}, K = {comp.k:.2f}")

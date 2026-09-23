@@ -44,7 +44,7 @@ def test_the_mean_matches_the_class():
     assert mean == pytest.approx(n * mu, rel=1e-9)
 
 
-# --- the test itself -------------------------------------------------------
+# the test
 
 
 def test_a_deployment_at_the_class_mean_is_not_flagged():

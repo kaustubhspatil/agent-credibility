@@ -53,7 +53,7 @@ def run_agent(rec, n, rate=0.3, seed=0):
             ep.resolve(success=rng.random() > rate)
 
 
-# --- the happy path --------------------------------------------------------
+# happy path
 
 
 def test_records_reach_the_bureau(bureau, tmp_path):
@@ -95,7 +95,7 @@ def test_checkpoints_anchor(bureau, tmp_path):
     assert sink.anchor(rec.checkpoint())["anchored"] is True
 
 
-# --- failing open ----------------------------------------------------------
+# failing open
 
 
 def test_an_unreachable_bureau_does_not_break_the_agent(tmp_path):
@@ -106,7 +106,7 @@ def test_an_unreachable_bureau_does_not_break_the_agent(tmp_path):
     run_agent(rec, 20)          # must not raise
     assert sink.flush() is None
     assert sink.last_error is not None
-    # and nothing was lost: it is all on disk
+    # nothing lost, it's on disk
     assert len(list(read_jsonl(tmp_path / "spool.jsonl"))) == 20
 
 
@@ -129,7 +129,7 @@ def test_a_refused_batch_does_not_raise_into_the_agent(bureau, tmp_path):
                    state_path=str(tmp_path / "s.json"))
     run_agent(rec, 5)
     sink.flush()
-    # corrupt the spool with a record the bureau will reject
+    # add a record the bureau will reject
     with open(tmp_path / "spool.jsonl", "a", encoding="utf-8") as fh:
         fh.write("not json at all\n")
     sink.sent_through = None
@@ -147,7 +147,7 @@ def test_a_conflict_resyncs_instead_of_wedging(bureau, tmp_path):
     sink.flush()
     assert sink.sent_through == 9
 
-    sink.sent_through = None      # pretend we never got the reply
+    sink.sent_through = None      # pretend the reply got lost
     run_agent(rec, 5)
     reply = sink.flush()
     assert reply is not None
@@ -155,7 +155,7 @@ def test_a_conflict_resyncs_instead_of_wedging(bureau, tmp_path):
     assert sink.sent_through == 14
 
 
-# --- the client itself -----------------------------------------------------
+# client
 
 
 def test_client_raises_where_the_sink_swallows(bureau, tmp_path):
