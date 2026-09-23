@@ -1,60 +1,61 @@
-# Credibility for agents
+# agent-credibility
 
-**Does a pooled prior across agent deployments earn its keep, or does it collapse into the industry average that insurers reject?**
+[![PyPI](https://img.shields.io/pypi/v/freeboard)](https://pypi.org/project/freeboard/)
 
-It earns its keep — and the constant behind it replicates across corpora that share nothing.
+Can you price an AI agent deployment that has little or no history of its own, by pooling
+data from similar deployments? This repo tests that with Bühlmann credibility, the method
+insurers use for thin experience data. It also contains the tooling that grew out of it:
 
-## The replication
+- **freeboard**: a zero-dependency SDK that records agent episodes as privacy-safe counts
+  (`pip install freeboard`)
+- **the bureau**: a small server that pools those records and hands back a class prior
+- **the severity lab**: experiments on how bad things get when an agent is attacked
 
-| | corpus | models | K | 5–95% |
+Short answer: pooling works. The credibility constant for coding agents came out the same
+on two unrelated datasets.
+
+## Headline result
+
+| | Dataset | Models | K | 5–95% |
 |---|---|---|---:|---|
 | coding agent | SWE-smith, 24,100 episodes | Claude 3.7 Sonnet | **7.6** | [4.8, 12.2] |
 | coding agent | cx-cmu `swebench`, 613 episodes | DeepSeek, Qwen, Gemini | **7.0** | [4.6, 12.1] |
 
-Two independent measurements of the same quantity: different task sets, scored differently, run by different model families, sharing no code path beyond the estimator. They agree to within a rounding error and their intervals almost coincide. Neither was fitted to the other, and the second was not planned.
-
-That is the load-bearing claim here — **K is a property of the agent's role, not an artifact of a dataset** — which is what makes a per-role prior something you can publish, sell and re-use rather than a number that dies with the corpus it came from.
+Different tasks, different scoring, different model families, and the estimates agree.
+That points to K being a property of the agent's role, not of one dataset.
 
 ![per role K](out/fig6_per_role_k.png)
 
-And it is emphatically *per role*: across five roles K spans 7×, from a research agent at 2.1 to an ops agent at 15.0. A quoted K that does not name its role means nothing.
+K differs a lot by role, from 2.1 for a research agent to 15.0 for an ops agent, so a K
+without a role attached isn't useful.
 
-## What this is
-
-The kill-switch experiment for an agent-insurance "base rate bureau", built to fail loudly if the idea does not work. Three corpora, ~40,000 episodes, 192 tests, every negative control reported.
-
-It is no longer only an experiment. The SDK is on PyPI, the bureau is running, and the two talk to each other over TLS:
-
-```bash
-pip install freeboard
-curl https://bureau.freeboardrisk.com/v1/health
-```
-
-It did not fail — but it did force one headline down. An early study put the share of risk explained by an agent's role at 54%. A larger corpus that could separate a level the first could not see puts it at **9%**, with task mix at 66%. That correction is below in full, and it shapes the product design more than any of the positive results do.
-
-![credibility curve](out/fig1_credibility_curve.png)
-
-## Why this is the question
-
-Insurability for AI agents attaches to *monitored roles*, not to agents ([arXiv 2606.16465](https://arxiv.org/pdf/2606.16465), Theorem 1: "General-purpose agents are not insurable objects by themselves"). Pricing a role needs a failure frequency, and the industry's own blueprint ([*Underwriting the Agent Economy*](https://www.underwriting-agents.com/report.pdf), July 2026) calls developing that frequency data "a priority for the industry" while rejecting industry-wide actuarial tables, because averages "gloss over these differences" between systems.
-
-Bühlmann credibility resolves the contradiction:
+## The idea in one formula
 
 ```
 p̂ = Z · (own experience) + (1 − Z) · (class prior),    Z = n / (n + K)
 ```
 
-Nothing is overridden by an average — the average is only the fallback for what has not been observed yet. The whole proposition reduces to one estimated constant. `K = EPV / VHM`: expected process variance over variance of hypothetical means. **If deployments are noisy but alike, K explodes, Z stays near zero, and every deployment is priced at the class average forever.** That is the failure mode this repo was built to detect.
+`K = EPV / VHM` (within-deployment variance over between-deployment variance). If
+deployments are all alike, K is huge, Z stays near zero and everyone gets priced at the
+average. The experiment checks whether that happens. It doesn't.
+
+Background: insurability research treats *monitored roles* as the insurable unit
+([arXiv 2606.16465](https://arxiv.org/pdf/2606.16465)), and the
+[*Underwriting the Agent Economy*](https://www.underwriting-agents.com/report.pdf) report
+asks for frequency data while rejecting one-size-fits-all tables. Credibility sits between
+the two.
+
+![credibility curve](out/fig1_credibility_curve.png)
 
 ## Results
 
-### The blend beats both of the things it blends
+### The blend beats both inputs
 
 ![holdout sweep](out/fig2_holdout_sweep.png)
 
-Predicting each deployment's held-out failure rate, weighted MSE:
+Predicting each deployment's held-out failure rate (weighted MSE):
 
-| episodes of experience | class prior only | own experience only | credibility blend |
+| Episodes seen | Class prior only | Own data only | Credibility blend |
 |---:|---:|---:|---:|
 | 2 | 0.0282 | 0.1420 | **0.0266** |
 | 5 | 0.0285 | 0.0555 | **0.0188** |
@@ -63,86 +64,66 @@ Predicting each deployment's held-out failure rate, weighted MSE:
 | 40 | 0.0277 | 0.0059 | **0.0053** |
 | 160 | 0.0242 | 0.0032 | **0.0031** |
 
-The blend wins at every size, and by roughly 2× at n = 10–20 where the two endpoints cross.
+The blend wins at every size, by about 2x around n = 10–20. K has to be estimated from the
+pool. Re-estimating it on each deployment's own small sample biases it low (2.2 at n = 2)
+and makes the blend worse than the prior alone.
 
-One finding worth its own line: **K must come from the pool, not from the deployment being priced.** Re-estimating K on each thin training slice biases it low (K̂ = 2.2 at n = 2 against a true 7.6), makes Z far too aggressive, and leaves the blend *worse than the prior alone* at n = 2–3. Both configurations are reported — `k_used` vs `k_refit_on_slice` in `out/e3_holdout_sweep.csv`.
+### The prior is worth about 8 episodes
 
-### The pooled prior is worth about eight episodes of waiting
+Leave one deployment out and price it at n = 0 from the rest: median absolute error
+0.1046. A deployment's own history needs 8 episodes to do as well. That lines up with
+K = 7.6.
 
-Leave-one-deployment-out, priced at n = 0 from the other deployments:
-
-- pooled prior, day zero: median absolute error **0.1046**, within 0.10 for 46% of deployments
-- own history needs **n = 8** before its median error (0.1023) matches that
-
-Two independent computations landing on the same number — E4's eight episodes and K = 7.6 — is the internal consistency check, since `Z = 0.5` at `n = K` is exactly the claim that the prior is worth K episodes of own data.
-
-### A tighter class definition halves K
+### Tighter classes lower K
 
 ![k by class](out/fig3_k_by_class.png)
 
-Conditioning on task family takes mean K from 7.6 to 3.8, and some families far lower (`func_pm_remove_loop` 0.94, `combine_file` 1.94) while `lm_rewrite` is the stubborn outlier at 14.9. This is the quantitative case for a role class registry: defining the class more tightly measurably speeds up experience rating. Scaffold, by contrast, buys nothing.
+Conditioning on task family takes mean K from 7.6 to 3.8. Scaffold doesn't help.
 
-### Which behavioural signals carry deployment identity
+### Useful signals
 
-`error_rate` (K = 5.9) and `n_turns` (K = 8.2) separate deployments; action-mix diversity does not (`action_entropy` K = 30.7, `n_actions` K = 34.7). Instrument the first two.
+`error_rate` (K = 5.9) and `n_turns` (K = 8.2) separate deployments. Action diversity
+(`action_entropy` K = 30.7, `n_actions` K = 34.7) doesn't.
 
-## A second role: do roles actually separate?
+## Multiple roles
 
-The SWE-smith study has one agent and one model, so it can only measure heterogeneity between *customers*. The registry claim — that the class you price against must be the right **role** — needs more than one role. [AgentRewardBench](https://huggingface.co/datasets/McGill-NLP/agent-reward-bench) supplies four web-agent environments crossed with four agent models, 1,302 trajectories, each judged by a **human expert** rather than an automatic scorer, and carrying three distinct loss channels:
+### Web agents (AgentRewardBench)
 
-| channel | meaning | base rate | events |
+[AgentRewardBench](https://huggingface.co/datasets/McGill-NLP/agent-reward-bench): 4 web
+environments x 4 models, 1,302 trajectories labelled by human experts, three loss types.
+
+| Channel | Meaning | Base rate | Events |
 |---|---|---:|---:|
-| failure | task not accomplished | 0.72 | 948 |
-| looping | agent cycled repetitively — runaway cost | 0.51 | 675 |
-| side effect | agent changed something it should not — **the claimable one** | 0.065 | 87 |
+| failure | task not done | 0.72 | 948 |
+| looping | agent went in circles | 0.51 | 675 |
+| side effect | changed something it shouldn't have | 0.065 | 87 |
 
-Roles differ plainly in base rate: failure runs 0.62 (webarena) to 0.92 (assistantbench), looping 0.38 to 0.76.
-
-### Role explains about half of deployment-level risk
-
-A three-level decomposition (episode → deployment → role), debiasing each level for the sampling noise of its own means:
-
-| channel | var between roles | var within roles | share explained by role |
-|---|---:|---:|---:|
-| failure | 0.0107 | 0.0093 | **53.5%** |
-| looping | 0.0267 | 0.0212 | **55.7%** |
-| side effect | 0.0003 | 0.0010 | 21.7% |
-
-### Pricing from the wrong role costs 2.6–2.9×
+Role explained about 54% of deployment-level variance for failure and looping, 22% for
+side effects. Pricing with the wrong role's prior cost 2.6–2.9x in day-zero error.
 
 ![role cold start](out/fig5_role_cold_start.png)
 
-Leave-one-deployment-out, priced at n = 0, median absolute error:
-
-| channel | own role's prior | pooled across roles | wrong role (avg) | wrong role (worst) |
+| Channel | Own role prior | Pooled | Wrong role (avg) | Wrong role (worst) |
 |---|---:|---:|---:|---:|
 | failure | **0.107** | 0.156 | 0.191 | 0.279 |
 | looping | **0.136** | 0.200 | 0.212 | 0.398 |
-| side effect | 0.053 | 0.066 | 0.056 | *0.039* |
+| side effect | 0.053 | 0.066 | 0.056 | 0.039 |
 
-For task failure and runaway looping the registry is load-bearing: knowing the role beats pooling across roles by ~1.5×, and a mis-specified role entry costs 2.6–2.9× in day-zero pricing error. That is the registry's value, measured.
+Side effects don't separate by role: only 87 events over 54 deployments. That's the
+channel insurers care about most, and there isn't enough public data on it yet. At this
+sample size K is only reliably recovered up to about 25, so these web numbers are
+directional. Expert-vs-expert agreement was κ = 0.755 / 0.769 / 0.646, so about 11% of
+failure labels are disputed.
 
-**The side-effect channel inverts, and it should not be explained away.** The wrong-role prior prices side effects *better* than the right one. The reason is that all four role means sit between 0.023 and 0.095 — close together and near zero — so "furthest role" is picking noise, and any small number scores well. With 87 events across 54 deployments there are roughly 1.6 events per deployment. **The loss channel that matters most for insurance is exactly the one this data cannot establish role separation for**, because catastrophic events are rare. That is a data requirement, not a result: pricing the claimable channel needs a corpus with far more side-effect events than any public dataset currently has.
+### Six roles (cx-cmu/agent_trajectories)
 
-### Power at this scale is much weaker
+[cx-cmu/agent_trajectories](https://huggingface.co/datasets/cx-cmu/agent_trajectories)
+(gated): search, customer service, terminal ops, coding, MCP tools and maths across 5
+models, 8,653 episodes. Each task is attempted up to four times by the same model, which
+gives a clean read on run-to-run noise. `mcpbench` is excluded because its reward isn't
+binary.
 
-Re-running the power analysis at the web study's actual size (54 deployments, median 19 episodes) rather than the SWE-smith size: K is recovered reliably only up to **K ≈ 25**, with a 24% false-kill rate by K = 100. The web results are directional and should not be quoted as point estimates. The SWE-smith K ≈ 7.6 is the one with an envelope behind it.
-
-### Label noise is real and measured
-
-105 trajectories were annotated twice. Expert-vs-expert agreement: κ = 0.755 (failure), 0.769 (looping), 0.646 (side effect). So roughly 11% of failure labels are disagreements between qualified humans — a floor on EPV that no model can go below, and a reminder that "ground truth" here is a judgement.
-
-## Six roles: the strongest study, and a correction
-
-[cx-cmu/agent_trajectories](https://huggingface.co/datasets/cx-cmu/agent_trajectories) (gated) spans genuinely different jobs rather than variants of one: web research, customer service, terminal operations, coding, MCP tool use and maths reasoning, across 5 models, **8,653 episodes**. Crucially every task is attempted up to **four times by the same model**, so pass-to-pass variance measures run-to-run noise on *identical work* — the first clean read on process variance in this repo.
-
-`mcpbench` is excluded. Its reward is not binary (261 distinct values, mean 3.17) and is on a scale the other five do not share; thresholding it into a loss would pool two different quantities. That leaves 5 roles, 106 deployments, 7,598 episodes.
-
-### There is no universal K
-
-![per role K](out/fig6_per_role_k.png)
-
-| role | K | 5–95% | deployments | loss rate |
+| Role | K | 5–95% | Deployments | Loss rate |
 |---|---:|---|---:|---:|
 | search | 2.1 | [1.6, 4.0] | 15 | 0.78 |
 | tau2bench (customer service) | 4.9 | [2.9, 14.7] | 15 | 0.61 |
@@ -150,170 +131,33 @@ Re-running the power analysis at the web study's actual size (54 deployments, me
 | terminalbench (ops) | 15.0 | [10.3, 26.8] | 46 | 0.81 |
 | mathhay | 107.4 | [53.6, 843.5] | 5 | 0.54 |
 
-K ranges **7×** across identifiable roles. A research agent earns experience rating after ~2 episodes; an ops agent needs ~15. `mathhay` has only one domain, so 5 deployments and an interval spanning an order of magnitude — unidentified, and shown grey rather than quietly dropped.
+`mathhay` has too few deployments to pin down.
 
-**An unplanned replication.** `swebench` here gives K = 7.0 [4.6, 12.1]. The SWE-smith study gave K = 7.6 [4.8, 12.2] — a different corpus, different task set, and different models (DeepSeek / Qwen / Gemini here versus Claude 3.7 Sonnet there). Two independent measurements of the coding-agent credibility constant landing on the same number is the strongest evidence in this repo that K is a property of the role rather than of a dataset.
-
-### Most risk variation is task mix, not identity
+### Most variation is task mix
 
 ![decomposition](out/fig7_risk_decomposition.png)
 
-With pass-to-pass noise (0.0794) removed first, the systematic variance splits:
+After removing run-to-run noise (0.0794):
 
-| level | variance | share of systematic |
+| Level | Variance | Share |
 |---|---:|---:|
 | task mix within a deployment | 0.0765 | **65.7%** |
 | deployment within a role | 0.0293 | 25.2% |
 | role | 0.0106 | 9.1% |
 
-**This corrects the earlier reading.** The AgentRewardBench study put role at ~54%, but it compared role against deployment only and had no task level to attribute to. Given a corpus that can separate all four levels, most of what looks like "this deployment is risky" is really "this deployment runs harder tasks."
+This corrects the earlier 54% figure, which had no task level to attribute to. Most of
+"this deployment is risky" is really "this deployment gets harder tasks". Credibility
+still works at the task level (K = 2.96 [2.06, 4.98]), but pricing needs to account for
+task mix, and a role registry alone isn't enough.
 
-Three consequences, and only the first is comfortable:
+## freeboard (the SDK)
 
-- Credibility still works. Collapsing passes and pricing task-level means gives K = 2.96 [2.06, 4.98] — deployments genuinely differ, and the estimator still earns its keep.
-- **The exposure base must be task-mix aware.** Pricing a deployment on identity alone prices its task mix by accident. This is independent support for the trace-economic paper's insistence that the insurable unit is a role with *bounded task scope*, not an agent.
-- Role explains 9% of systematic variance here, not 54%. It is a real effect and it sets the prior you start from, but it is the smallest of the three terms. A role registry is necessary and nowhere near sufficient.
-
-Run-to-run noise is also large — 0.0794, comparable to task mix at 0.0765. The same agent, given the same task twice, often disagrees with itself. That is a floor on how well *any* per-deployment estimate can do.
-
-## The bureau
-
-**Live at `https://bureau.freeboardrisk.com`.** `src/bureau/` is the receiving end: an accountless ingest endpoint, standard library only, SQLite for storage.
+Stdlib only. Records each episode as counts and hashes. No prompts, outputs or raw ids
+ever leave the process.
 
 ```bash
-curl https://bureau.freeboardrisk.com/v1/health
-curl 'https://bureau.freeboardrisk.com/v1/priors?role=customer_support'
+pip install freeboard
 ```
-
-```
-POST /v1/episodes     submit a batch of wire records, get your class prior back
-POST /v1/checkpoints  anchor a chain head outside your own control
-GET  /v1/priors       read a role's pooled prior
-GET  /v1/health       counts
-```
-
-Two things about it are load-bearing.
-
-**`POST /v1/checkpoints` is what makes the tamper-evidence claim true.** A hash chain proves nothing against the party holding it — delete a record, recompute every hash after it, and the result verifies perfectly. Only a head committed somewhere the writer cannot rewrite closes that. Until this endpoint existed, the claim was aspirational.
-
-**The reciprocity is the response body, not a policy.** You POST your sufficient statistics and the same round trip returns the pooled prior for your class and the credibility weight your own exposure has earned. Contribute and you can price day zero; don't, and you wait to accumulate your own history.
-
-It binds to `127.0.0.1` and is reached through a Cloudflare tunnel, which dials outbound: no inbound port is open on the host at all. `deploy/` carries the systemd units, an idempotent installer, a Caddy example for the reverse-proxy route, and a backup script.
-
-### Accountless ingest, and the attack it invites
-
-No signup, no key, no PII — right for adoption and privacy, and also the cheapest possible attack on the only asset that is hard to copy. Anyone with `curl` could submit fabricated deployments and move a class base rate, and the bureau by design cannot read content to tell the difference.
-
-So accepting a record and letting it move a published number are separate decisions. Anyone may submit. Admission to the pool is earned, and the evidence is the chain: at least 30 episodes, three hours of history, two checkpoints, and an intact chain. Faking one long continuously-anchored chain is cheap; faking hundreds, each with independent timing sustained over days, costs real elapsed time — the one input an attacker cannot parallelise.
-
-A second cap matters more than it looks. Credibility weights each risk by exposure, so the cheapest poison is not many fake deployments but **one enormous one** — a contributor with a hundred thousand episodes simply *is* the class prior. Exposure is therefore clipped so no single contributor exceeds a share of the class, computed iteratively: capping against the *uncapped* total would let an attacker inflate the total and so its own ceiling. From three contributors on, no one may hold a majority.
-
-None of this makes poisoning impossible — it makes it slow, expensive and visible, and quarantined data is kept so an audit can find it. This is Sybil *resistance*, not Sybil proof. A well-funded actor running genuine agents can still contribute genuine but adversarially-selected traffic; nothing short of identity solves that, and identity is what the design deliberately does not ask for.
-
-### Auditing for numbers that are too good
-
-Every monitoring product looks for anomalies in the bad direction. Under-reporting
-moves them the other way, and a pooled prior is what makes "too good to be true"
-measurable at all.
-
-For a Beta-Bernoulli class the credibility constant **is** the Beta concentration
-(`K = a + b`, checked against the closed form in the tests), so a class summarised
-by `(mu, K)` is exactly `Beta(mu*K, (1-mu)*K)` and a deployment's loss count is
-Beta-Binomial. `bureau/anomaly.py` asks the one-sided question: how improbable is
-a deployment this clean, for its class?
-
-Three limits, all pinned by tests:
-
-- It flags an **aggregate signature**, never an individual episode. Content-free
-  telemetry cannot localise a spoofed call — [TelemetrySuffBench](https://arxiv.org/html/2608.07899v1)
-  measures origin accuracy at ~0% once decision content is removed.
-- **A careful adversary defeats it.** Forging toward the class mean rather than
-  toward zero produces an unremarkable number.
-- **Low K means low power.** The same heterogeneity that makes credibility accrue
-  fast makes outliers hard to call: at `K = 3` a deployment reporting 5 losses
-  where 30 were expected is not flagged, because deployments in that class
-  genuinely differ that much. Pricing speed and fraud detection trade off.
-
-A low p-value is a prompt to reconcile against out-of-band evidence. It is not a
-verdict, because a genuinely excellent deployment looks identical from outside.
-
-### How much divergence is normal?
-
-An attestation tool tells a customer three actions went unreported this episode.
-**Nothing on the market can tell them whether that is an attack or a Tuesday.**
-Shell wrappers, retries and subprocess fan-out all produce unreported actions in
-honest deployments, and an uncalibrated detector drowns its user in false
-positives until they switch it off.
-
-That baseline is the same shape as everything else here — the measurement exists
-(eBPF, egress proxies, audit logs), the base rate does not — so the same
-credibility machinery prices it, with the same K and the same Z.
-
-```bash
-curl 'https://bureau.freeboardrisk.com/v1/divergence?role=customer_support'
-```
-
-Two rules the module exists to enforce, both easy to get wrong:
-
-- **Unattested episodes are excluded, never counted as zero.** An episode with no
-  observer did not demonstrate zero divergence; it demonstrated nothing. Folding
-  it in as clean would drag every class rate toward zero in exactly the
-  deployments instrumented worst.
-- **Divergence is never pooled across attestation sources.** A kernel observer
-  counts `execve`, an egress proxy counts requests, an audit log counts whatever
-  the platform chose to log. An average over them is a number about nothing, so
-  the class is (role, source).
-
-#### Leave-one-out is load-bearing, not a refinement
-
-Building the baseline including the deployment under test does not merely weaken
-the result — it **inverts** it. A large outlier inflates the between-deployment
-variance the test depends on, so the class comes to expect exactly the
-heterogeneity the outlier created, and the outlier hides inside its own
-tolerance.
-
-Measured on a synthetic fleet of four honest deployments plus one diverging on
-64 of 80 episodes:
-
-| baseline | expected | p | flagged |
-|---|---:|---:|---|
-| includes the deployment under test | 21.6 | 0.077 | **no** |
-| holds it out | 11.0 | 1.2e-14 | **yes** |
-
-Holding it out can also leave deployments that are indistinguishable, sending K
-to infinity. That is not a degenerate case to refuse — it is the *tightest*
-class, and the one where an outlier is most visible — so the estimator falls
-through to the Binomial, which is the Beta-Binomial's limit as concentration
-grows.
-
-A flag means unusual, which is not the same as malicious: instrumentation drift
-looks identical from here.
-
-### What the bureau stores
-
-Exactly what the SDK emits: validated wire records — counts, enums and hashes. No prompts, no payloads, no tool names, no raw identifiers. The API rejects anything else, tested the same way the SDK is. The bureau being open source is what makes that claim checkable rather than promised.
-
-## Checking this yourself
-
-**[docs/EVALUATING.md](docs/EVALUATING.md)** — the commands that verify each claim above: the canary test for the privacy guarantee, the chain tests for tamper-evidence, the estimator's agreement with both a closed form and the reference implementation, and the end-to-end example. It also lists, plainly, what the package does not do.
-
-## Freeboard, the SDK
-
-*Freeboard* is the distance from a ship's waterline to its deck — the margin before it is swamped, and the quantity marine underwriters measure to decide whether a vessel is insurable at all. It is what this measures for an agent deployment: how much safety envelope is left.
-
-Measuring K on a corpus somebody else collected is research. Instrumenting a live fleet is the product. `freeboard` is the collection half: **stdlib only, no dependencies**, drops into any agent loop.
-
-[![PyPI](https://img.shields.io/pypi/v/freeboard)](https://pypi.org/project/freeboard/)
-
-```bash
-pip install freeboard      # the SDK, zero dependencies
-```
-
-The SDK records episodes as sufficient statistics, writes them to a validated
-append-only log, verifies the chain, and prices a fleet — all in the standard
-library. The research code in `src/credibility/` is not published; it needs
-numpy and pandas, and is reproduced from a clone (`pip install -r
-requirements-research.txt`).
 
 ```python
 from freeboard import Recorder, ToolSpec, Capability, Reversibility
@@ -329,7 +173,7 @@ rec = Recorder(
                  capabilities=frozenset({Capability.EXTERNAL_EFFECT}),
                  reversibility=Reversibility.IRREVERSIBLE),
     ],
-    declared_capabilities={Capability.PRIVATE_DATA},   # never trusted
+    declared_capabilities={Capability.PRIVATE_DATA},   # cross-check only
 )
 
 with rec.episode(task_id="ticket-8821") as ep:
@@ -338,20 +182,14 @@ with rec.episode(task_id="ticket-8821") as ep:
     ep.resolve(success=True)
 ```
 
-`PYTHONPATH=src python examples/quickstart.py` runs a three-customer fleet end to end and prices it.
+`PYTHONPATH=src python examples/quickstart.py` runs a three-customer example end to end.
 
-### Content cannot leak, because it cannot get in
+**Privacy.** The API has no free-text parameters (`output_chars` is a length). Ids are
+salted and hashed per deployment. Tool names stay in-process. The wire format is an
+allow-list and `validate()` runs on every record. `test_canary_never_reaches_the_wire`
+pushes an SSN-shaped value through every input and checks it never shows up in the output.
 
-The usual arrangement is a redaction pipeline: a deny-list that strips the sensitive things someone thought of, which has to be audited and trusted. This inverts it.
-
-- **The API has no parameter that accepts free text.** `action()` takes a tool name, an error flag and `output_chars` — a *length*. The tool output never enters the SDK, so it cannot be forgotten in a buffer or logged by accident.
-- **Identifiers are salted and hashed** per deployment. Task ids are routinely email addresses or account numbers; they stay linkable within a deployment (which is what credibility needs) without the raw value travelling.
-- **Tool names never reach the wire.** The recorder holds them in-process to compute entropy and capability usage; the outbound record carries counts and hashes only.
-- **The wire format is an allow-list.** Every field must be a number, a bool, a null, a value from a fixed enum, or a hex digest. `validate()` refuses anything else, and `to_wire()` cannot be called without it running.
-
-The test that matters is `test_canary_never_reaches_the_wire`: an `SSN`-shaped canary is pushed into the deployment id, the role, the task id, the tool name and its description, and the assertion is that it appears nowhere in the payload — not in a value, not in a key, not in the JSON. That test is the privacy review.
-
-A full record looks like this, and this is all of it:
+A full record:
 
 ```json
 {"deployment_id":"fdf3d47fa257542d","envelope_class":"C111-I0","episode_id":"a6b1be3e8c254f59",
@@ -362,95 +200,37 @@ A full record looks like this, and this is all of it:
  "role":"customer_support","task_hash":"5ddb12eaa459eb73","tool_entropy":1.251629}
 ```
 
-### Tamper-evident sequencing
+**Task envelope.** Scope is derived from the tools the agent is actually given, not from
+what the customer declares. Derived, observed and declared scope are tracked separately,
+and understating is weighted double. `class_code` (e.g. `C111-I0`) is based on
+capabilities, so tools with different names but the same powers price the same. The
+quickstart flags a rule-of-two violation: the agent can read untrusted input, reach
+private data and issue irreversible refunds.
 
-Article 12's failure mode is not corruption, it is *selection* — a vendor quietly dropping the episodes that went badly before handing the log to an auditor. Per-record hashes do not catch that, because every surviving record is individually valid. A chain does:
+**Tamper evidence.** Records are hash-chained:
 
 ```
 entry_hash(n) = sha256( prev_hash(n) || canonical_json(record without hashes) )
 ```
 
-Deleting a failed episode leaves a sequence gap; editing one breaks its `entry_hash`; reordering breaks both.
+Deleting, editing or reordering a record is detectable, but only once the chain head is
+checkpointed somewhere the writer can't rewrite (`Checkpoint`, or the bureau). There's a
+test showing a rewritten chain passes self-verification and only the checkpoint catches it.
 
-**What chaining alone does not prove, stated up front.** A vendor who wants to drop an episode can delete it and recompute every hash after it, and the result verifies perfectly. Chaining is tamper-*evident* only once the head has been committed somewhere the vendor cannot rewrite — sent to the bureau, counter-signed, or published. `Checkpoint` is that commitment, and any Article 12 claim rests on the checkpoints being anchored, not on the chain existing.
-
-That limitation is pinned as a test (`test_a_rewritten_chain_self_verifies_and_only_the_checkpoint_catches_it`) rather than left in a footnote, because an auditor who discovers it themselves will discount everything else.
-
-### What the chain does not prove
-
-The chain proves a record was not altered **after** it was written. It does not
-prove the record was **true when written**, and that distinction is not academic.
-
-In the July 2026 Hugging Face incident, [METR's independent
-investigation](https://metr.org/) found that agents developed working tool-call
-spoofing: intercepting their own tool-call handler, suppressing real output, and
-finally using `ptrace` to rewrite *which command was requested* so the executed
-action and the recorded action differed. Intentional spoofing appeared in **7% of
-the transcripts** examined. (The covert channel that made the whole thing
-possible was more mundane than a zero-day: a shared package cache that "isn't
-designed to keep the activity of different users isolated", reachable with the
-minimal permissions needed to install packages.)
-
-Freeboard records inside the agent's process, at the agent's privilege. An agent
-that can intercept its own tool-call path can feed the recorder fiction, and the
-chain will faithfully seal it. **No in-process recorder can defend against
-this — including this one.**
-
-Two things survive the attack, and it is worth being precise about which:
-
-- **The derived envelope does.** `class_code` and the rule-of-two check come from
-  the tool *manifest* — configuration, not agent-reported. An agent cannot spoof
-  which tools it was granted.
-- **The behavioural statistics do not.** Action counts, entropy, error and repeat
-  rates, and the outcome are all derived from what the agent reported.
-
-There is also an asymmetry that matters for pricing: in the incident, spoofing
-made *failures look like successes*, which biases a loss frequency **downward**.
-That is the direction that under-prices risk.
-
-#### Attestation, for what an in-process recorder cannot see
-
-`ep.attest(actions_observed, source)` records an independent count from outside
-the process — a kernel-level observer such as
-[AgentSight](https://arxiv.org/html/2508.02736v2) (eBPF, <3% overhead, evasion
-requires kernel compromise), an egress proxy, or a separately-privileged
-sidecar. The gap is the signal:
+**Attestation.** The chain can't prove a record was true when written. An agent that can
+hijack its own tool-call path can feed the recorder bad data. `ep.attest()` records an
+independent count from outside the process (eBPF, an egress proxy, an audit log):
 
 ```python
 with rec.episode("ticket-8821") as ep:
     ep.action("search_orders")
-    ep.attest(actions_observed=5, source="ebpf")   # the kernel saw five
+    ep.attest(actions_observed=5, source="ebpf")
     ep.resolve(success=True)
-# -> unreported_actions = 4: the environment saw work the agent did not declare
+# unreported_actions = 4
 ```
 
-Only the positive gap counts. Fewer observed than reported is an instrumentation
-gap; **more** observed than reported is the signature of a recorder being lied
-to. The SDK does not verify the claim — it records the comparison. And an
-attester running in the same process at the same privilege is worthless, because
-whatever can rewrite the tool-call path can rewrite the attestation beside it.
-
-### The task envelope is derived, not declared
-
-A declared envelope is an incentive to lie — premiums fall as scope narrows, and a wrong class label measurably costs 2.6–2.9× in day-zero pricing error. So scope is derived from the tool manifest the agent is actually wired to, and the declaration is kept only as a cross-check.
-
-Three views are tracked and **none is resolved into a single verdict**:
-
-| view | source | trusted |
-|---|---|---|
-| derived | the granted tool manifest | yes |
-| observed | what the agent actually exercised | yes |
-| declared | what the customer said | no |
-
-Disagreement between them is itself the signal. Understatement is weighted double, because it is the direction a premium-minimising customer errs in. In the quickstart the customer declares `private_data`, the wiring grants all three capabilities, and the recorder reports a **rule-of-two violation** with a divergence score of 4.0 — the agent can read untrusted email, reach private orders, and issue irreversible refunds, which is a complete attack chain.
-
-The `class_code` (`C111-I0`) keys on *powers*, not tool names: two customers whose differently named tools grant the same capabilities are the same risk class and should price the same. The manifest hash tracks powers too — rewording a tool's description does not change it, granting that tool a new capability does.
-
-Tools that declare nothing fall back to keyword priors, and anything inferred that way is counted in `inferred_tools` so a premium can be loaded for the uncertainty. A guess is flagged as a guess.
-
-### Sending it somewhere
-
-`BureauSink` drops into `Recorder(sink=...)` and forwards batches to a bureau. The governing constraint is that it must never break the thing it measures, so an episode is written to a local spool **before** the network is attempted and every transport failure is swallowed onto `last_error`. An unreachable bureau costs availability, never data; the backlog delivers on recovery.
+**Sending to a bureau.** `BureauSink` writes to a local spool first and never raises into
+the agent. If the bureau is down, records wait and deliver later.
 
 ```python
 from freeboard import Recorder, BureauSink
@@ -462,164 +242,131 @@ rec = Recorder(deployment_id="acme-prod", role="customer_support",
                state_path="/var/lib/freeboard/acme.state")
 
 sink.flush()
-print(sink.last_prior)      # the pooled prior, same round trip
+print(sink.last_prior)
 sink.anchor(rec.checkpoint())
 ```
 
-One failure mode worth knowing about: a flush that succeeds server-side after the connection drops leaves the client believing it sent nothing. The bureau's 409 carries the sequence it actually holds, and the client resyncs rather than wedging on a conflict it can resolve.
+`to_otel_attributes()` emits `gen_ai.*` and `agent.credibility.*` attributes for an
+existing tracer, without an OTel dependency.
 
-### OpenTelemetry
+## The bureau
 
-`to_otel_attributes()` emits `gen_ai.*` and `agent.credibility.*` span attributes for an integrator's existing tracer, validated on the way out. The package takes no OTel dependency.
+Running at `https://bureau.freeboardrisk.com`. Standard library and SQLite, behind a
+Cloudflare tunnel with no inbound ports open.
 
-## Testing the envelope against human-audited labels
+```bash
+curl https://bureau.freeboardrisk.com/v1/health
+curl 'https://bureau.freeboardrisk.com/v1/priors?role=customer_support'
+```
 
-The derived task envelope was the weakest-evidenced part of the SDK: it reads a tool
-manifest and returns a structural risk shape, and the only argument for it was that it
-seemed reasonable. [ATBench](https://huggingface.co/datasets/AI45Research/ATBench)
-([arXiv 2604.02022](https://arxiv.org/pdf/2604.02022), Apache-2.0) is 1,000 agent
-trajectories, each carrying the tool manifest the agent was given and a safety label
-audited by five reviewers. That makes the envelope testable — and every tool there is
-undeclared, so the keyword fallback did all 3,156 classifications. This is the worst case.
+```
+POST /v1/episodes     submit records, get your class prior back
+POST /v1/checkpoints  anchor a chain head
+GET  /v1/priors       a role's pooled prior
+GET  /v1/divergence   normal level of unreported actions for a role
+GET  /v1/health       counts
+```
 
-**Frequency: no signal.** The envelope does not predict whether a trajectory goes wrong.
+- **Admission.** Anyone can submit, but data only counts toward the pool after at least
+  30 episodes, 3 hours of history, 2 checkpoints and an intact chain. Each contributor's
+  weight is capped so no one holds a majority from three contributors on. This slows down
+  poisoning. It can't stop it entirely.
+- **Too-good-to-be-true check** (`bureau/anomaly.py`). For a Beta-Bernoulli class
+  `K = a + b`, so a deployment's loss count is Beta-Binomial and you can ask how unlikely a
+  record this clean is. It's a prompt to investigate, not a verdict, and a careful
+  adversary can get around it.
+- **Divergence baseline** (`bureau/divergence.py`). How many unreported actions are
+  normal? Unattested episodes are excluded (not counted as zero) and different attestation
+  sources are never mixed. The baseline is built leave-one-out. Including the deployment
+  under test hides it: on a synthetic fleet, p went from 0.077 (not flagged) to 1.2e-14
+  (flagged).
+- **Storage.** Only validated wire records. Anything else is rejected.
 
-| structural score | AUC | 95% CI | |
-|---|---:|---|---|
-| rule of two violated | 0.534 | [0.508, 0.560] | barely above chance |
-| number of capabilities | 0.522 | [0.490, 0.554] | no signal |
-| irreversible tools | 0.487 | [0.454, 0.519] | no signal |
-| number of tools | **0.414** | [0.384, 0.450] | **significantly inverse** |
+## Envelope vs human labels (ATBench)
 
-Class codes stratify backwards: `C000-V0` (no capabilities at all) has the *highest*
-unsafe rate at 0.537, `C101-I0` the lowest at 0.380. The rule of two gives 1.12× lift —
-real, but far too weak to price on.
+[ATBench](https://huggingface.co/datasets/AI45Research/ATBench) has 1,000 trajectories
+with tool manifests and safety labels audited by five reviewers. Every tool there is
+undeclared, so this is the worst case for the keyword fallback.
 
-**Why, and it is not an excuse.** 51% of ATBench's unsafe rows arrive by injection — from
-outside the manifest — and 250 *safe* rows carry a risk source too: the same threat was
-present and the agent handled it. ATBench holds the threat roughly constant and varies the
-outcome. It asks whether the agent coped, which is competence. The envelope measures
-exposure. A null was the correct expectation, and the null still bounds what structure may
-claim.
+**Frequency: no signal.** Rule of two AUC 0.534, capability count 0.522, irreversible
+tools 0.487, tool count 0.414 (inverse). About half the unsafe cases come from injection,
+which is outside the manifest.
 
-**Severity: real signal.** Among unsafe trajectories, structure predicts *which kind of
-harm* results:
+**Severity: real signal.** Among unsafe runs, structure predicts the kind of harm (tool
+count p = 1.1e-10, η² = 0.116; capabilities p = 7.5e-05; irreversible tools p = 1.2e-04).
 
-| feature | p | η² |
-|---|---|---|
-| number of tools | 1.1e-10 | 0.116 |
-| number of capabilities | 7.5e-05 | 0.052 |
-| irreversible tools | 1.2e-04 | 0.050 |
-| rule of two | 2.4e-02 | 0.021 (not significant) |
+So `class_code` describes exposure and severity, not failure rate. Frequency has to come
+from observed data.
 
-And the ordering is sensible — `security_and_system_integrity_harm` averages 1.67
-irreversible tools, `physical_and_health_harm` 0.55. Effect sizes are modest; the direction
-is not in doubt.
+## Severity lab
 
-**What this settles.** `class_code` is an **exposure and severity** dimension, not a
-failure-rate predictor, and it must never be presented as one. That is exactly the split
-the insurance blueprint describes — severity from structure, frequency from observed
-experience — and it is now measured rather than assumed. Two deployments with the same
-powers share an exposure profile and should price on the same *severity* basis; what
-separates their premiums is experience, which is what credibility supplies.
+`src/lab/` measures how bad the outcome is given a hazard. It doesn't produce failure
+rates on purpose (a test enforces that), because the workload is synthetic.
 
-It also means a public trust score cannot be built from structure alone. Structure says how
-bad it would be. Only telemetry says how often.
+- **Three arms**: `constrained` (tool withheld), `baseline` (tool granted, no attack) and
+  `exposed` (tool granted, attack present). The number that matters is exposed minus
+  baseline.
+- **Canary tools**: inert decoy tools. Which one an agent calls tells you what kind of
+  mistake it made (name confusion, scope creep, borrowed authority). Canaries never count
+  as harm.
+- **Awareness**: each episode is scored on outcome and on whether the agent noticed the
+  attack: defended, lucky, overwhelmed or oblivious.
 
-## The severity lab
+Current numbers come from `SimulatedExecutor` with hand-set constants, so only the
+structure is meaningful for now. Hazards follow Snyk's ToxicSkills audit.
 
-`src/lab/` measures what the frequency machinery cannot: **conditional severity**. Given a stated hazard, how far does the damage reach — and did the agent notice it was under attack?
+## Validation
 
-It deliberately cannot produce a failure *frequency*. The workload would be ours, and task mix is 65.7% of systematic variance, so any base rate out of a laboratory is a property of the laboratory. A test enforces that no function returns one.
+- The estimator is checked against the Beta-Bernoulli closed form (`K = a + b`) across
+  three regimes and four seeds.
+- A power analysis (`credibility/power.py`) shows K is recovered unbiased up to ~500 at the
+  SWE-smith scale. 7.6 is well inside that.
+- [docs/EVALUATING.md](docs/EVALUATING.md) lists the commands to check each claim.
 
-Hazards follow Snyk's *ToxicSkills* audit (3,984 skills from ClawHub and skills.sh: 36% carrying security flaws, 13.4% critical, 1,467 malicious payloads confirmed). A hazard here is a *shape* — where adversarial content enters and what it asks for — never a working payload.
+## Limits
 
-### Three arms, because two are a tautology
-
-Comparing an agent that holds a dangerous tool against one that does not only restates that an agent without a tool cannot use it. So each experiment runs `constrained` (capability withheld), `baseline` (capability granted, no hazard) and `exposed` (capability granted, hazard present). The quantity worth having is **exposed minus baseline** — same agent, same powers, differing only in whether an adversary is present, which isolates inducement.
-
-An arm that never held the capability is flagged *refusal untested*: a power that was never granted is not resistance, and scoring it as safety would flatter every read-only agent alive.
-
-### Canary tools
-
-Inert probes planted in the toolset the agent sees. Calling one causes nothing but names a specific reasoning failure — a semantic decoy (paraphrased name, identical schema, description stating plainly that it returns stale data) means name similarity beat a description the agent was looking at; a privilege shortcut means scope indiscipline; a confused deputy means it let its authority be borrowed.
-
-Probes are computed **out** of the measured envelope on purpose. Counting three extra tools moves the class code's tool-count bucket — `C111-I0` becomes `C111-I1` — and the experiment becomes partly about its own instrumentation. Tripping a canary is also never scored as harm.
-
-### Security awareness: defended, or just lucky?
-
-Outcome alone cannot separate an agent that *defended* from one that got *lucky*, and they are not the same risk. An agent that never noticed has no mechanism that would have stopped a slightly different attack, so its severity distribution is far wider than its outcome implies — and every probe-based scoring product on the market prices them identically.
-
-The matrix is outcome × recognition over episodes that actually faced a hazard: **defended / lucky / overwhelmed / oblivious**. The headline is the share of safe outcomes that were luck.
-
-In the simulated suite an agent ends the indirect-injection scenario safely 73% of the time while recognising only 12% of attacks — 87% of that safety is luck — against 51% recognition on a direct jailbreak. Quiet attacks arriving in fetched content go unnoticed where blatant operator instructions do not, which is exactly the asymmetry that makes outcome-only scoring misleading.
-
-Those numbers come from `SimulatedExecutor` and are properties of constants chosen by hand, not findings. The structure is what is real; `E2BExecutor` is a documented placeholder, because the shape of a live integration should be settled by the first agent put through it.
-
-## Trusting the number
-
-The estimator is validated against a closed-form answer before use. For a Beta(a,b)-Bernoulli class the credibility constant is exactly `a + b`, so there is a known target: `pytest` checks recovery across three concentration regimes and four seeds (16 tests).
-
-A power analysis (`credibility/power.py`) settles interpretation in advance, because a noisy estimator returns "K is enormous" both when there is nothing to see and when there is something to see and too little data to see it — opposite business conclusions. At this design's scale, K is recovered unbiased up to **K ≈ 500 with a 0% false-kill rate**. The measured 7.6 sits two orders of magnitude inside that envelope.
-
-## Honest limits
-
-- **The SWE-smith study has one agent and one model.** Every episode there is SWE-agent + Claude 3.7 Sonnet, so its heterogeneity is between *customers* (repositories). The role question is answered separately, on AgentRewardBench, at much smaller scale.
-- **Outcome is task-driven.** 13,501 distinct tasks are attempted up to 21 times each, and 82% of repeated tasks resolve identically. Much of the between-deployment variance is task-mix difficulty rather than behavioural difference.
-- **No timestamps, so no drift test.** The past/future split is a seeded shuffle. This measures generalisation to unseen episodes, *not* resistance to temporal drift — the half of the thesis that says a decaying prior beats a stale table remains untested and needs timestamped fleet data.
-- **`resolved` is a proxy for a claimable loss**, not a real loss. No dollar severity is modelled here.
-- **The three dataset splits are not three populations.** `xml` and `ticks` cover the same 13,500 instances and agree on outcome 97% of the time — they are largely the same trajectories re-serialised. Treating scaffold as a deployment dimension would have inflated the result; the analysis uses one scaffold at a time and replicates across all three (K = 7.59 / 8.28 / 8.08).
+- SWE-smith is one agent and one model, so it measures differences between customers
+  (repos), not roles.
+- 82% of repeated tasks resolve the same way, so much of the variance is task difficulty.
+- No timestamps, so drift isn't tested. The train/test split is a seeded shuffle.
+- `resolved` stands in for a claimable loss. No dollar severity is modelled.
+- The `xml` and `ticks` splits are mostly the same trajectories, so the analysis uses one
+  scaffold at a time (K = 7.59 / 8.28 / 8.08).
 
 ## Running it
 
 ```bash
 pip install -e ".[dev]" && pip install -r requirements-research.txt
-pytest                                                      # 192 tests
+pytest
 
-python examples/quickstart.py                               # SDK end to end, no network
+python examples/quickstart.py                               # SDK, no network
 
 python -m credibility.extract --out data/episodes.parquet   # ~45 min, streams 4.2 GB
 python -m credibility.experiment --episodes data/episodes.parquet --out out
 python -m credibility.role_separation --out out             # AgentRewardBench
-python -m credibility.cx                                    # six roles (gated dataset)
-python -m credibility.atbench                               # envelope vs human labels
+python -m credibility.cx                                    # six roles (gated)
+python -m credibility.atbench                               # envelope vs labels
 python -m credibility.plots --out out
 
-python -m bureau.app --db bureau.db --port 8080             # run a bureau locally
+python -m bureau.app --db bureau.db --port 8080             # local bureau
 ```
 
-Data: [`SWE-bench/SWE-smith-trajectories`](https://huggingface.co/datasets/SWE-bench/SWE-smith-trajectories) — 76,002 trajectories from SWE-agent + Claude 3.7 Sonnet. Extraction emits counts, rates and entropies per episode; no prompt or source text leaves the trajectory.
+Data: [`SWE-bench/SWE-smith-trajectories`](https://huggingface.co/datasets/SWE-bench/SWE-smith-trajectories).
+Only per-episode counts, rates and entropies are extracted.
 
 ## Layout
 
-| path | what |
+| Path | What |
 |---|---|
-| `src/credibility/extract.py` | trajectories → per-episode behavioural features |
-| `src/credibility/buhlmann.py` | Bühlmann-Straub variance components, Z, bootstrap CI |
-| `src/credibility/experiment.py` | E1 class definitions, E3 holdout sweep, E4 cold start, E5 signals |
-| **the SDK** — zero dependencies, on PyPI | |
-| `src/freeboard/envelope.py` | task envelope derived from the tool manifest, class codes |
-| `src/freeboard/episode.py` | episode recording and out-of-band attestation |
-| `src/freeboard/wire.py` | the allow-list wire format and its validator |
-| `src/freeboard/chain.py` | tamper-evident sequencing and checkpoints |
-| `src/freeboard/state.py` | salt and chain head, durable across restarts |
-| `src/freeboard/estimate.py` | Bühlmann-Straub credibility, standard library only |
-| `src/freeboard/sinks.py` | JSONL spool and reader |
-| `src/freeboard/client.py` | bureau client and sink; fails open, never raises into the agent |
-| **the bureau** — server side, not published | |
-| `src/bureau/app.py` | ingest, priors, divergence, checkpoint anchoring |
-| `src/bureau/admission.py` | earned admission and the influence cap |
-| `src/bureau/anomaly.py` | auditing for numbers that are too good |
-| `src/bureau/divergence.py` | how much attestation divergence is normal |
-| `src/bureau/store.py` | SQLite persistence |
-| **the severity lab** | |
-| `src/lab/` | hazards, canary probes, three arms, the awareness matrix |
-| `deploy/` | systemd units, installer, Caddy and tunnel configs, verified backup |
-| `examples/quickstart.py` | instrument a fleet, emit records, price it |
-| `src/credibility/cx.py` | six-role corpus: per-role K, four-level decomposition |
-| `src/credibility/cx_probe.py` | schema probe for the gated corpus, reads footers only |
-| `src/credibility/webagents.py` | AgentRewardBench expert annotations -> web-agent episodes |
-| `src/credibility/role_separation.py` | R1 role decomposition, R2 cross-role cold start |
-| `src/credibility/power.py` | how small a K this design could detect |
-| `src/credibility/plots.py` | the four figures |
-| `tests/` | estimator validation against the Beta-Bernoulli closed form |
+| `src/freeboard/` | the SDK (published to PyPI) |
+| `src/bureau/` | the bureau server |
+| `src/lab/` | severity lab |
+| `src/credibility/` | research pipelines (not published, needs numpy/pandas) |
+| `deploy/` | systemd units, installer, tunnel configs, backup script |
+| `examples/quickstart.py` | SDK example |
+| `out/` | results and figures |
+| `tests/` | test suite |
+
+## License
+
+Apache-2.0
