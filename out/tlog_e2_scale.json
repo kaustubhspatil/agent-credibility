@@ -1,0 +1,118 @@
+{
+  "python": "3.11.9",
+  "machine": "AMD64",
+  "processor": "Intel64 Family 6 Model 154 Stepping 3, GenuineIntel",
+  "results": {
+    "1000": {
+      "build": {
+        "encode_validate_s": 0.048,
+        "tree_append_s": 0.004,
+        "append_us_per_entry": 4.13,
+        "mean_entry_bytes": 862.3,
+        "tree_hash_bytes": 63808
+      },
+      "inclusion": {
+        "checked": 1000,
+        "all_verified": true,
+        "len_min": 8,
+        "len_mean": 9.98,
+        "len_max": 10,
+        "bytes_max": 320,
+        "gen_us": 14.4,
+        "verify_us": 12.6,
+        "linear_chain_records_needed_mean": 499.5
+      },
+      "consistency": {
+        "checked": 999,
+        "all_verified": true,
+        "len_min": 1,
+        "len_mean": 9.98,
+        "len_max": 11,
+        "bytes_max": 352,
+        "gen_us": 14.3,
+        "verify_us": 16.8,
+        "linear_chain_records_needed_mean": 500
+      },
+      "ceil_log2_n": 10,
+      "full_audit": {
+        "merkle_replay_from_leaf_hashes_s": 0.002,
+        "linear_full_verify_s": 0.014,
+        "linear_us_per_record": 13.82
+      }
+    },
+    "100000": {
+      "build": {
+        "encode_validate_s": 5.072,
+        "tree_append_s": 0.433,
+        "append_us_per_entry": 4.33,
+        "mean_entry_bytes": 864.3,
+        "tree_hash_bytes": 6399808
+      },
+      "inclusion": {
+        "checked": 1003,
+        "all_verified": true,
+        "len_min": 10,
+        "len_mean": 16.93,
+        "len_max": 17,
+        "bytes_max": 544,
+        "gen_us": 23.0,
+        "verify_us": 18.9,
+        "linear_chain_records_needed_mean": 51341.2
+      },
+      "consistency": {
+        "checked": 1004,
+        "all_verified": true,
+        "len_min": 1,
+        "len_mean": 16.86,
+        "len_max": 18,
+        "bytes_max": 576,
+        "gen_us": 22.5,
+        "verify_us": 25.9,
+        "linear_chain_records_needed_mean": 51746.5
+      },
+      "ceil_log2_n": 17,
+      "full_audit": {
+        "merkle_replay_from_leaf_hashes_s": 0.163,
+        "linear_full_verify_s": 1.384,
+        "linear_us_per_record": 13.84
+      }
+    },
+    "1000000": {
+      "build": {
+        "encode_validate_s": 49.294,
+        "tree_append_s": 4.152,
+        "append_us_per_entry": 4.15,
+        "mean_entry_bytes": 865.3,
+        "tree_hash_bytes": 63999776
+      },
+      "inclusion": {
+        "checked": 1003,
+        "all_verified": true,
+        "len_min": 12,
+        "len_mean": 19.97,
+        "len_max": 20,
+        "bytes_max": 640,
+        "gen_us": 25.4,
+        "verify_us": 20.8,
+        "linear_chain_records_needed_mean": 492495.6
+      },
+      "consistency": {
+        "checked": 1004,
+        "all_verified": true,
+        "len_min": 1,
+        "len_mean": 19.92,
+        "len_max": 21,
+        "bytes_max": 672,
+        "gen_us": 24.9,
+        "verify_us": 29.5,
+        "linear_chain_records_needed_mean": 514598.0
+      },
+      "ceil_log2_n": 20,
+      "full_audit": {
+        "merkle_replay_from_leaf_hashes_s": 1.587,
+        "linear_full_verify_s": 13.698,
+        "linear_us_per_record": 13.7
+      }
+    }
+  }
+}

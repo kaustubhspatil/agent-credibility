@@ -1,0 +1,101 @@
+{
+  "exhaustive_sizes": [
+    1,
+    300
+  ],
+  "exhaustive": {
+    "root_mismatch": {
+      "count": 0,
+      "first": []
+    },
+    "inclusion_proof_mismatch": {
+      "count": 0,
+      "first": []
+    },
+    "inclusion_rfc_rejected_valid": {
+      "count": 0,
+      "first": []
+    },
+    "inclusion_ref_rejected_valid": {
+      "count": 0,
+      "first": []
+    },
+    "inclusion_mutant_accepted": {
+      "count": 0,
+      "first": []
+    },
+    "consistency_proof_mismatch": {
+      "count": 0,
+      "first": []
+    },
+    "consistency_rfc_rejected_valid": {
+      "count": 0,
+      "first": []
+    },
+    "consistency_ref_rejected_valid": {
+      "count": 0,
+      "first": []
+    },
+    "consistency_mutant_accepted": {
+      "count": 0,
+      "first": []
+    },
+    "inclusion_checked": 45150,
+    "consistency_checked": 45450,
+    "mutants_stating_true_facts": 0,
+    "max_inclusion_excess": 0,
+    "max_consistency_excess": 1
+  },
+  "sampled_sizes": {
+    "count": 200,
+    "range": [
+      318,
+      2996
+    ]
+  },
+  "sampled": {
+    "root_mismatch": {
+      "count": 0,
+      "first": []
+    },
+    "inclusion_proof_mismatch": {
+      "count": 0,
+      "first": []
+    },
+    "inclusion_rfc_rejected_valid": {
+      "count": 0,
+      "first": []
+    },
+    "inclusion_ref_rejected_valid": {
+      "count": 0,
+      "first": []
+    },
+    "inclusion_mutant_accepted": {
+      "count": 0,
+      "first": []
+    },
+    "consistency_proof_mismatch": {
+      "count": 0,
+      "first": []
+    },
+    "consistency_rfc_rejected_valid": {
+      "count": 0,
+      "first": []
+    },
+    "consistency_ref_rejected_valid": {
+      "count": 0,
+      "first": []
+    },
+    "consistency_mutant_accepted": {
+      "count": 0,
+      "first": []
+    },
+    "inclusion_checked": 6322,
+    "consistency_checked": 6713,
+    "mutants_stating_true_facts": 0,
+    "max_inclusion_excess": 0,
+    "max_consistency_excess": 1
+  },
+  "seconds": 11.9,
+  "disagreements": 0
+}

@@ -1,0 +1,311 @@
+{
+  "trials_per_scenario": 1000,
+  "n_range": [
+    8,
+    600
+  ],
+  "seed": 20260927,
+  "delete": {
+    "linear_self_verifies": {
+      "count": 1000,
+      "trials": 1000,
+      "rate": 1.0,
+      "wilson95": [
+        0.9962,
+        1.0
+      ]
+    },
+    "linear_anchor_detects": {
+      "count": 1000,
+      "trials": 1000,
+      "rate": 1.0,
+      "wilson95": [
+        0.9962,
+        1.0
+      ]
+    },
+    "witness_detects": {
+      "count": 1000,
+      "trials": 1000,
+      "rate": 1.0,
+      "wilson95": [
+        0.9962,
+        1.0
+      ]
+    },
+    "history_changed": {
+      "count": 1000,
+      "trials": 1000,
+      "rate": 1.0,
+      "wilson95": [
+        0.9962,
+        1.0
+      ]
+    },
+    "refusal_codes": {
+      "inconsistent": 2466,
+      "fork": 21,
+      "rollback": 1
+    },
+    "mean_n": 295.656
+  },
+  "modify": {
+    "linear_self_verifies": {
+      "count": 1000,
+      "trials": 1000,
+      "rate": 1.0,
+      "wilson95": [
+        0.9962,
+        1.0
+      ]
+    },
+    "linear_anchor_detects": {
+      "count": 1000,
+      "trials": 1000,
+      "rate": 1.0,
+      "wilson95": [
+        0.9962,
+        1.0
+      ]
+    },
+    "witness_detects": {
+      "count": 1000,
+      "trials": 1000,
+      "rate": 1.0,
+      "wilson95": [
+        0.9962,
+        1.0
+      ]
+    },
+    "history_changed": {
+      "count": 1000,
+      "trials": 1000,
+      "rate": 1.0,
+      "wilson95": [
+        0.9962,
+        1.0
+      ]
+    },
+    "refusal_codes": {
+      "fork": 21,
+      "inconsistent": 2512
+    },
+    "mean_n": 300.583
+  },
+  "reorder": {
+    "linear_self_verifies": {
+      "count": 1000,
+      "trials": 1000,
+      "rate": 1.0,
+      "wilson95": [
+        0.9962,
+        1.0
+      ]
+    },
+    "linear_anchor_detects": {
+      "count": 1000,
+      "trials": 1000,
+      "rate": 1.0,
+      "wilson95": [
+        0.9962,
+        1.0
+      ]
+    },
+    "witness_detects": {
+      "count": 1000,
+      "trials": 1000,
+      "rate": 1.0,
+      "wilson95": [
+        0.9962,
+        1.0
+      ]
+    },
+    "history_changed": {
+      "count": 1000,
+      "trials": 1000,
+      "rate": 1.0,
+      "wilson95": [
+        0.9962,
+        1.0
+      ]
+    },
+    "refusal_codes": {
+      "inconsistent": 2490,
+      "fork": 12
+    },
+    "mean_n": 302.791
+  },
+  "truncate": {
+    "linear_self_verifies": {
+      "count": 1000,
+      "trials": 1000,
+      "rate": 1.0,
+      "wilson95": [
+        0.9962,
+        1.0
+      ]
+    },
+    "linear_anchor_detects": {
+      "count": 1000,
+      "trials": 1000,
+      "rate": 1.0,
+      "wilson95": [
+        0.9962,
+        1.0
+      ]
+    },
+    "witness_detects": {
+      "count": 1000,
+      "trials": 1000,
+      "rate": 1.0,
+      "wilson95": [
+        0.9962,
+        1.0
+      ]
+    },
+    "history_changed": {
+      "count": 1000,
+      "trials": 1000,
+      "rate": 1.0,
+      "wilson95": [
+        0.9962,
+        1.0
+      ]
+    },
+    "refusal_codes": {
+      "rollback": 665,
+      "inconsistent": 949,
+      "fork": 9
+    },
+    "mean_n": 302.958
+  },
+  "unwitnessed_suffix": {
+    "linear_self_verifies": {
+      "count": 1000,
+      "trials": 1000,
+      "rate": 1.0,
+      "wilson95": [
+        0.9962,
+        1.0
+      ]
+    },
+    "linear_anchor_detects": {
+      "count": 0,
+      "trials": 1000,
+      "rate": 0.0,
+      "wilson95": [
+        0.0,
+        0.0038
+      ]
+    },
+    "witness_detects": {
+      "count": 0,
+      "trials": 1000,
+      "rate": 0.0,
+      "wilson95": [
+        0.0,
+        0.0038
+      ]
+    },
+    "history_changed": {
+      "count": 1000,
+      "trials": 1000,
+      "rate": 1.0,
+      "wilson95": [
+        0.9962,
+        1.0
+      ]
+    },
+    "refusal_codes": {
+      "inconsistent": 998
+    },
+    "mean_n": 301.535
+  },
+  "fork_after_common_checkpoint": {
+    "per_witness_detects": {
+      "count": 0,
+      "trials": 1000,
+      "rate": 0.0,
+      "wilson95": [
+        0.0,
+        0.0038
+      ]
+    },
+    "refusal_codes": {},
+    "gossip_detects": {
+      "count": 1000,
+      "trials": 1000,
+      "rate": 1.0,
+      "wilson95": [
+        0.9962,
+        1.0
+      ]
+    },
+    "gossip_statuses": {
+      "fork": 500,
+      "unproven": 500
+    },
+    "quorum1_split_accepted": {
+      "count": 1000,
+      "trials": 1000,
+      "rate": 1.0,
+      "wilson95": [
+        0.9962,
+        1.0
+      ]
+    },
+    "quorum2_any_branch_accepted": {
+      "count": 0,
+      "trials": 1000,
+      "rate": 0.0,
+      "wilson95": [
+        0.0,
+        0.0038
+      ]
+    }
+  },
+  "fork_inside_witnessed_prefix": {
+    "per_witness_detects": {
+      "count": 1000,
+      "trials": 1000,
+      "rate": 1.0,
+      "wilson95": [
+        0.9962,
+        1.0
+      ]
+    },
+    "refusal_codes": {
+      "inconsistent": 1000
+    }
+  },
+  "split_view_to_auditor": {
+    "log_signature_only_fooled": {
+      "count": 1000,
+      "trials": 1000,
+      "rate": 1.0,
+      "wilson95": [
+        0.9962,
+        1.0
+      ]
+    },
+    "quorum_policy_fooled": {
+      "count": 0,
+      "trials": 1000,
+      "rate": 0.0,
+      "wilson95": [
+        0.0,
+        0.0038
+      ]
+    },
+    "fake_entries_match_witnessed_root": {
+      "count": 0,
+      "trials": 1000,
+      "rate": 0.0,
+      "wilson95": [
+        0.0,
+        0.0038
+      ]
+    }
+  },
+  "seconds": 525.0
+}

@@ -23,7 +23,7 @@
     payload = to_wire(rec.records[-1])   # validated; refuses to carry content
 """
 
-__version__ = "0.3.0"
+__version__ = "0.4.0"
 
 from .chain import (
     GENESIS,
@@ -55,6 +55,40 @@ from .estimate import (
 )
 from .sinks import JsonlSink, read_checkpoint, read_jsonl, write_checkpoint
 from .state import RecorderState, StateError
+from .tlog import (
+    MerkleTree,
+    TransparencyLog,
+    root_from_range,
+    verify_consistency,
+    verify_inclusion,
+)
+from .witness import (
+    HAVE_ED25519,
+    Cosignature,
+    Ed25519Signer,
+    Ed25519Verifier,
+    HmacSigner,
+    LogCheckpoint,
+    SignedCheckpoint,
+    Signer,
+    Verifier,
+    Witness,
+    WitnessRefusal,
+    compare_checkpoints,
+    verify_cosigned,
+)
+from .evidence import (
+    EvidenceLog,
+    PackKind,
+    ReasonCode,
+    Timeline,
+    Verdict,
+    commitment_hash,
+    eval_commitment_entry,
+    evidence_pack_entry,
+    revalidation_entry,
+    verify_timeline,
+)
 from .wire import (
     SCHEMA_VERSION,
     SPAN_NAME,
@@ -105,4 +139,33 @@ __all__ = [
     "to_otel_attributes",
     "to_wire",
     "validate",
+    # witnessed transparency log
+    "MerkleTree",
+    "TransparencyLog",
+    "root_from_range",
+    "verify_consistency",
+    "verify_inclusion",
+    "HAVE_ED25519",
+    "Cosignature",
+    "Ed25519Signer",
+    "Ed25519Verifier",
+    "HmacSigner",
+    "LogCheckpoint",
+    "SignedCheckpoint",
+    "Signer",
+    "Verifier",
+    "Witness",
+    "WitnessRefusal",
+    "compare_checkpoints",
+    "verify_cosigned",
+    "EvidenceLog",
+    "PackKind",
+    "ReasonCode",
+    "Timeline",
+    "Verdict",
+    "commitment_hash",
+    "eval_commitment_entry",
+    "evidence_pack_entry",
+    "revalidation_entry",
+    "verify_timeline",
 ]

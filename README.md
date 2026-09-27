@@ -217,6 +217,12 @@ Deleting, editing or reordering a record is detectable, but only once the chain 
 checkpointed somewhere the writer can't rewrite (`Checkpoint`, or the bureau). There's a
 test showing a rewritten chain passes self-verification and only the checkpoint catches it.
 
+The witnessed log (`freeboard.tlog`, `freeboard.witness`, `freeboard.evidence`, new in 0.4.0)
+closes that gap without a service: an RFC 9162 Merkle log whose checkpoints witnesses cosign
+only after a consistency proof. In the rewrite experiment a plain chain verified clean after
+every rewrite; a witness holding an earlier checkpoint refused every one that touched what it
+had seen. Design and limits: [docs/WITNESSED_LOG.md](docs/WITNESSED_LOG.md).
+
 **Attestation.** The chain can't prove a record was true when written. An agent that can
 hijack its own tool-call path can feed the recorder bad data. `ep.attest()` records an
 independent count from outside the process (eBPF, an egress proxy, an audit log):
@@ -366,6 +372,8 @@ Only per-episode counts, rates and entropies are extracted.
 | `examples/quickstart.py` | SDK example |
 | `out/` | results and figures |
 | `tests/` | test suite |
+| `src/freeboard/tlog.py`, `witness.py`, `evidence.py` | witnessed Merkle log, cosigned checkpoints, evidence timeline |
+| `examples/witnessed_log.py`, `experiments/witnessed_log/` | usage example; rewrite, scale and correctness experiments |
 
 ## License
 

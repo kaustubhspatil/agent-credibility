@@ -72,6 +72,24 @@ existing. The limitation is a passing test —
 `test_a_rewritten_chain_self_verifies_and_only_the_checkpoint_catches_it` — not
 a footnote.
 
+## Does the witnessed log close that gap?
+
+```bash
+pytest tests/test_tlog.py tests/test_witness.py tests/test_evidence.py tests/test_rewrite_attack.py -q
+python experiments/witnessed_log/e1_rewrite.py      # rewrite attacks, 1000 trials each
+python experiments/witnessed_log/e2_scale.py        # 1e3, 1e5 and 1e6 entries
+python experiments/witnessed_log/e3_correctness.py  # every pair of sizes up to 300
+```
+
+The Merkle log is checked against the Certificate Transparency test vectors and
+against a naive reference tree written from the RFC 9162 recursion, for every
+size from 1 to 300. `test_rewrite_attack.py` pins both halves of the result: a
+witness refuses every rewrite of what it has already cosigned, and it does not
+see a rewrite of entries appended since, or a fork where each witness is shown
+its own consistent branch. Only gossip between witnesses or a majority quorum
+catches that, and both are tested. The design, the threat model and the
+measured numbers are in [WITNESSED_LOG.md](WITNESSED_LOG.md).
+
 ## Is the estimator right?
 
 ```bash
@@ -154,4 +172,7 @@ direction nobody audits.
 - **No detector of individual spoofed episodes.** The divergence and
   underreporting tests flag an aggregate signature across many episodes, never a
   single one, and an adversary forging toward the class mean defeats both.
+- **No witness service.** The witnessed log is a protocol and its offline
+  verifiers. Running witnesses, carrying proofs between parties and gossip
+  between witnesses are not built, and `HmacSigner` is for tests only.
 - **The API may change before 1.0.**
