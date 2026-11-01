@@ -315,13 +315,38 @@ test vectors for the first eight leaves.
   right to accept them. That mutation is no longer applied at size 0; nothing
   in `tlog.py` changed.
 
+## C2SP formats and the witness protocol (0.5.0)
+
+`src/freeboard/c2sp.py` speaks the formats existing witness networks use, so a
+freeboard log can be cosigned by witnesses its operator does not run:
+
+| spec | what freeboard implements |
+|---|---|
+| c2sp.org/signed-note | notes, Ed25519 signature lines, key IDs, verifier keys, and the Go private key form |
+| c2sp.org/tlog-checkpoint | origin, size and base64 root, signed by the log (`log_note`) |
+| c2sp.org/tlog-cosignature | Ed25519 cosignatures (type 0x04) over `cosignature/v1`, timestamps in POSIX seconds |
+| c2sp.org/tlog-witness | `NoteWitness.add_checkpoint`, an HTTP server (`serve_witness`) and a client (`add_checkpoint`) |
+
+Checked against an independent implementation: freeboard signs the example
+note published with Go's `golang.org/x/mod/sumdb/note` and produces the same
+signature line byte for byte, and verifies Go's own (tests/test_c2sp.py). The
+cosignature and witness formats are checked against the specs' text only; no
+public witness has cosigned a freeboard checkpoint yet. ML-DSA-44, which the
+specs recommend for new witnesses, is not implemented: Ed25519 only.
+
+The witness keeps the size and root it last cosigned per log, answers 409 with
+that size for a stale request, and 422 for a proof that does not verify, so
+the E1 rewrite is refused in this form too (a dropped entry, regrown and
+signed again).
+
 ## What this does not do
 
-- No network anything: no witness daemon, no transport for proofs, no gossip
-  protocol. `compare_checkpoints` is the check two parties run once they have
-  exchanged checkpoints.
-- Not wire compatible with the C2SP checkpoint and cosignature formats, though
-  close in shape. Adopting them would let existing witness networks cosign.
+- No gossip protocol. `compare_checkpoints` is the check two parties run once
+  they have exchanged checkpoints. Since 0.5.0 there is one transport: the
+  C2SP witness protocol (below).
+- The 0.4.0 checkpoint and cosignature formats in `witness.py` stay freeboard's
+  own. `c2sp.py` (0.5.0) adds the community formats beside them; the two are
+  not interchangeable.
 - `EvidenceLog` keeps entries in memory and replays its file on open; a very
   large log would want the tree's hash levels persisted instead.
 - No key rotation, no witness enrolment protocol, no log shutdown record.
